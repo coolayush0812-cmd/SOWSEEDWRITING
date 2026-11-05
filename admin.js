@@ -83,7 +83,7 @@ function setAdminStatus(message, isError = false) {
 
 async function renderAdmin() {
   if (document.querySelector("#admin-dashboard").hidden) return;
-  setAdminStatus("Loading payment and request records…");
+  setAdminStatus("Loading orders…");
   try {
     const records = await adminApiRequest("list");
     adminState.payments = (records.payments || []).map(mapPayment);
@@ -127,11 +127,11 @@ function renderAdminCalendar() {
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const dailyTotals = new Map();
 
-  completedPayments().forEach((payment) => {
-    const key = localDateKey(payment.paidAt);
+  state.orders.forEach((order) => {
+    const key = localDateKey(order.createdAt);
     const current = dailyTotals.get(key) || { count: 0, total: 0 };
     current.count += 1;
-    current.total += payment.amount;
+    current.total += order.amount;
     dailyTotals.set(key, current);
   });
 
@@ -150,7 +150,7 @@ function renderAdminCalendar() {
     button.className = "calendar-day";
     button.dataset.date = key;
     button.innerHTML = `<strong>${day}</strong>${total ? `<small>${adminMoney(total.total)}</small>` : ""}`;
-    button.setAttribute("aria-label", `${adminDayLabel(key)}${total ? `, ${total.count} paid order${total.count === 1 ? "" : "s"}, ${adminMoney(total.total)}` : ", no payments"}`);
+    button.setAttribute("aria-label", `${adminDayLabel(key)}${total ? `, ${total.count} order${total.count === 1 ? "" : "s"}, ${adminMoney(total.total)}` : ", no orders"}`);
     button.classList.toggle("has-orders", Boolean(total));
     button.classList.toggle("is-today", key === localDateKey(new Date()));
     button.classList.toggle("is-selected", key === adminState.selectedDate);
@@ -184,40 +184,49 @@ function renderPaymentCard(payment) {
 
 function renderSelectedDay() {
   const key = adminState.selectedDate;
-  const payments = completedPayments().filter((payment) => localDateKey(payment.paidAt) === key);
-  const total = payments.reduce((sum, payment) => sum + payment.amount, 0);
+  const orders = state.orders.filter((order) => localDateKey(order.createdAt) === key);
+  const total = orders.reduce((sum, order) => sum + order.amount, 0);
   const year = adminState.calendarCursor.getFullYear();
   const month = adminState.calendarCursor.getMonth();
-  const monthPayments = completedPayments().filter((payment) => {
-    const date = new Date(payment.paidAt);
+  const monthOrders = state.orders.filter((order) => {
+    const date = new Date(order.createdAt);
     return date.getFullYear() === year && date.getMonth() === month;
   });
-  const monthTotal = monthPayments.reduce((sum, payment) => sum + payment.amount, 0);
+  const monthTotal = monthOrders.reduce((sum, order) => sum + order.amount, 0);
   document.querySelector("#selected-day-label").textContent = adminDayLabel(key);
-  document.querySelector("#selected-day-total").textContent = `${payments.length} order${payments.length === 1 ? "" : "s"} · ${adminMoney(total)}`;
+  document.querySelector("#selected-day-total").textContent = `${orders.length} order${orders.length === 1 ? "" : "s"} · ${adminMoney(total)}`;
   document.querySelector("#selected-day-summary").textContent = adminMoney(total);
-  document.querySelector("#selected-day-count").textContent = `${payments.length} payment${payments.length === 1 ? "" : "s"}`;
+  document.querySelector("#selected-day-count").textContent = `${orders.length} order${orders.length === 1 ? "" : "s"}`;
   document.querySelector("#month-summary-label").textContent = adminState.calendarCursor.toLocaleDateString(undefined, { month: "long", year: "numeric" });
   document.querySelector("#month-summary-total").textContent = adminMoney(monthTotal);
-  document.querySelector("#month-summary-count").textContent = `${monthPayments.length} payment${monthPayments.length === 1 ? "" : "s"}`;
-  document.querySelector("#orders-list").innerHTML = payments.length
-    ? payments.map(renderPaymentCard).join("")
-    : '<div class="empty-orders">No completed payments on this date.</div>';
+  document.querySelector("#month-summary-count").textContent = `${monthOrders.length} order${monthOrders.length === 1 ? "" : "s"}`;
+  document.querySelector("#orders-list").innerHTML = orders.length
+    ? orders.map(renderOrderCalendarCard).join("")
+    : '<div class="empty-orders">No orders on this date.</div>';
+}
+
+function renderOrderCalendarCard(order) {
+  const fulfilled = order.status === "fulfilled";
+  const description = order.bookTitle || order.pageLength;
+  return `<article class="payment-card order-calendar-card">
+    <div class="payment-card-head"><div><strong>${escapeHtml(order.name)}</strong><small>${escapeHtml(adminTime(order.createdAt))} · ${escapeHtml(order.email)}</small></div><strong>${adminMoney(order.amount)}</strong></div>
+    <div class="payment-fields"><div><small>Order ID</small><span>${escapeHtml(order.id)}</span></div><div><small>Item</small><span>${escapeHtml(description)}</span></div><div><small>Status</small><span>${fulfilled ? `Fulfilled ${escapeHtml(adminDateTime(order.fulfilledAt))}` : "Unfulfilled"}</span></div><div><small>Request</small><span>${escapeHtml(order.bookTitle ? `Book order: ${order.bookTitle}` : order.request)}</span></div></div>
+    <div class="payment-actions"><button type="button" data-action="receipt-order" data-id="${escapeHtml(order.id)}" ${fulfilled ? "" : "disabled title=\"Available after fulfillment\""}>Download PDF</button><button type="button" data-action="fulfill-order" data-id="${escapeHtml(order.id)}" ${fulfilled ? "disabled" : ""}>${fulfilled ? "✓ Fulfilled" : "Mark fulfilled"}</button></div>
+  </article>`;
 }
 
 function renderPaymentActivity() {
-  const payments = completedPayments();
-  document.querySelector("#payment-count").textContent = payments.length;
-  document.querySelector("#payment-total").textContent = adminMoney(payments.reduce((sum, payment) => sum + payment.amount, 0));
-  document.querySelector("#unfulfilled-count").textContent = payments.filter((payment) => payment.status !== "fulfilled").length;
-  document.querySelector("#activity-list").innerHTML = payments.length
-    ? payments.slice(0, 6).map((payment) => `<button type="button" class="activity-item" data-date="${localDateKey(payment.paidAt)}"><span><strong>${escapeHtml(payment.itemName)}</strong><small>${escapeHtml(adminDateTime(payment.paidAt))}</small></span><b>${adminMoney(payment.amount)}</b></button>`).join("")
-    : '<div class="empty-orders">No verified payments have been recorded yet.</div>';
+  const orders = [...state.orders].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  document.querySelector("#payment-count").textContent = orders.length;
+  document.querySelector("#payment-total").textContent = adminMoney(orders.reduce((sum, order) => sum + order.amount, 0));
+  document.querySelector("#unfulfilled-count").textContent = orders.filter((order) => order.status !== "fulfilled").length;
+  document.querySelector("#activity-list").innerHTML = orders.length
+    ? orders.slice(0, 6).map((order) => `<button type="button" class="activity-item" data-date="${localDateKey(order.createdAt)}"><span><strong>${escapeHtml(order.bookTitle || order.pageLength)}</strong><small>${escapeHtml(order.name)} · ${escapeHtml(adminDateTime(order.createdAt))}</small></span><b>${adminMoney(order.amount)}</b></button>`).join("")
+    : '<div class="empty-orders">No orders have been received yet.</div>';
 }
 
 function renderWritingRequests() {
-  const linked = new Set(adminState.payments.map((payment) => payment.orderId).filter(Boolean));
-  const requests = state.orders.filter((order) => !linked.has(order.id));
+  const requests = state.orders;
   document.querySelector("#request-list").innerHTML = requests.length
     ? requests.slice(0, 20).map((order) => `<article class="request-card"><div><strong>${escapeHtml(order.name)}</strong><span>${escapeHtml(order.bookTitle || order.pageLength)} · ${adminMoney(order.amount)}</span></div><small>${escapeHtml(adminDateTime(order.createdAt))} · ${escapeHtml(order.email)}</small><p>${escapeHtml(order.bookTitle ? `Book order: ${order.bookTitle}` : order.request)}</p><div class="request-card-actions"><span>${order.status === "fulfilled" ? `✓ Fulfilled ${escapeHtml(adminDateTime(order.fulfilledAt))}` : "Unfulfilled"}</span><button type="button" data-action="fulfill-order" data-id="${escapeHtml(order.id)}" ${order.status === "fulfilled" ? "disabled" : ""}>${order.status === "fulfilled" ? "Fulfilled" : "Mark fulfilled"}</button></div></article>`).join("")
     : '<div class="empty-orders">No orders or writing requests yet.</div>';
@@ -383,6 +392,12 @@ function configureAdminPortal() {
     const action = event.target.closest("button[data-action]");
     if (!action || action.disabled) return;
     const payment = adminState.payments.find((item) => item.id === action.dataset.id);
+    const order = state.orders.find((item) => item.id === action.dataset.id);
+    if (action.dataset.action === "fulfill-order" && order) openFulfillModal(order.id, action, "order");
+    if (action.dataset.action === "receipt-order" && order) {
+      try { downloadOrderReceipt(order); }
+      catch (error) { console.error("Receipt download failed", error); setAdminStatus("The receipt could not be downloaded.", true); }
+    }
     if (!payment) return;
     if (action.dataset.action === "fulfill") openFulfillModal(payment.id, action);
     if (action.dataset.action === "receipt") {

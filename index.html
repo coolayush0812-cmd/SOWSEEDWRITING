@@ -223,27 +223,27 @@
                 </div>
                 <div class="orders-list" id="orders-list"></div>
                 <div class="calendar-totals">
-                  <div><small>Selected day</small><strong id="selected-day-summary">$0</strong><span id="selected-day-count">0 payments</span></div>
-                  <div><small id="month-summary-label">This month</small><strong id="month-summary-total">$0</strong><span id="month-summary-count">0 payments</span></div>
+                  <div><small>Selected day</small><strong id="selected-day-summary">$0</strong><span id="selected-day-count">0 orders</span></div>
+                  <div><small id="month-summary-label">This month</small><strong id="month-summary-total">$0</strong><span id="month-summary-count">0 orders</span></div>
                 </div>
               </div>
             </div>
           </section>
 
           <section class="activity-card" aria-labelledby="activity-heading">
-            <h3 id="activity-heading">2. Payment activity</h3>
-            <p>Completed PayPal captures recorded by the verified webhook.</p>
+            <h3 id="activity-heading">2. Order overview</h3>
+            <p>Orders submitted through the website, with their status and total value.</p>
             <div class="activity-stats">
-              <div><small>Payments completed</small><strong id="payment-count">0</strong><span>Recorded captures</span></div>
-              <div><small>Paid total</small><strong id="payment-total">$0</strong><span>USD</span></div>
-              <div><small>Awaiting fulfillment</small><strong id="unfulfilled-count">0</strong><span>Paid orders</span></div>
+              <div><small>Orders received</small><strong id="payment-count">0</strong><span>All website orders</span></div>
+              <div><small>Order total</small><strong id="payment-total">$0</strong><span>USD</span></div>
+              <div><small>Awaiting fulfillment</small><strong id="unfulfilled-count">0</strong><span>Orders to send</span></div>
             </div>
-            <h4>Recent payments</h4>
+            <h4>Recent orders</h4>
             <div class="activity-list" id="activity-list"></div>
             <p class="admin-status" id="admin-status" role="status" aria-live="polite"></p>
             <div class="request-section">
-              <h4>Book orders &amp; personal requests</h4>
-              <p>Book orders are sent by email and can be marked fulfilled here.</p>
+              <h4>Orders to fulfill</h4>
+              <p>Send the order by email, then record when you fulfilled it.</p>
               <div class="request-list" id="request-list"></div>
             </div>
           </section>

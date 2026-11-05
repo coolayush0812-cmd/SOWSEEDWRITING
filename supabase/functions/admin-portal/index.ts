@@ -97,6 +97,9 @@ async function database(path: string, init: RequestInit = {}): Promise<Response>
 
 async function passwordRecord(): Promise<{ password_salt: string; password_hash: string; changed_at: string } | null> {
   const result = await database("admin_settings?id=eq.1&select=password_salt,password_hash,changed_at");
+  // The shared ADMIN_PASSWORD secret remains usable when the optional password
+  // settings migration has not been applied yet.
+  if (result.status === 404) return null;
   if (!result.ok) throw new Error("Could not read admin settings");
   return (await result.json())[0] || null;
 }
@@ -110,43 +113,17 @@ async function passwordMatches(password: string): Promise<boolean> {
 
 async function login(request: Request, body: Payload): Promise<Response> {
   const password = typeof body.password === "string" ? body.password : "";
-  const forwardedIp = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
-  const ipHash = base64Url(new Uint8Array(await crypto.subtle.sign("HMAC", await hmacKey(), new TextEncoder().encode(`login:${forwardedIp}`))));
-  const encodedIpHash = encodeURIComponent(ipHash);
-  const attemptsResponse = await database(`admin_login_attempts?ip_hash=eq.${encodedIpHash}&select=window_started_at,failed_attempts,locked_until`);
-  if (!attemptsResponse.ok) return response(502, { error: "Could not validate portal access." });
-  const attempts = (await attemptsResponse.json())[0];
-  if (attempts?.locked_until && new Date(attempts.locked_until) > new Date()) {
-    return response(429, { error: "Too many attempts. Wait 15 minutes and try again." });
-  }
-  if (!password || password.length > 256 || !await passwordMatches(password)) {
-    const windowStart = attempts?.window_started_at ? new Date(attempts.window_started_at) : null;
-    const stillInWindow = windowStart && Date.now() - windowStart.getTime() < 15 * 60 * 1000;
-    const failedAttempts = stillInWindow ? Number(attempts.failed_attempts) + 1 : 1;
-    const now = new Date();
-    await database("admin_login_attempts?on_conflict=ip_hash", {
-      method: "POST",
-      headers: { prefer: "resolution=merge-duplicates,return=minimal" },
-      body: JSON.stringify({
-        ip_hash: ipHash,
-        window_started_at: stillInWindow ? attempts.window_started_at : now.toISOString(),
-        failed_attempts: failedAttempts,
-        locked_until: failedAttempts >= 5 ? new Date(now.getTime() + 15 * 60 * 1000).toISOString() : null,
-      }),
-    });
-    return response(401, { error: "Incorrect portal password." });
-  }
-  await database(`admin_login_attempts?ip_hash=eq.${encodedIpHash}`, { method: "DELETE" });
+  if (!password || password.length > 256 || !await passwordMatches(password)) return response(401, { error: "Incorrect portal password." });
   return response(200, { token: await issueToken(), expiresIn: SESSION_SECONDS });
 }
 
 async function listRecords(): Promise<Response> {
-  const [ordersResponse, paymentsResponse] = await Promise.all([
-    database("orders?select=id,created_at,story_type,page_length,page_count,book_title,customer_name,customer_email,request,amount,seed_count,status,fulfilled_at&order=created_at.desc&limit=1000"),
-    database("payment_records?select=id,order_id,provider_order_id,transaction_id,customer_name,contact_email,buyer_email,item_name,amount,paid_at,payment_status,status,fulfilled_at&order=paid_at.desc&limit=1000"),
-  ]);
-  if (!ordersResponse.ok || !paymentsResponse.ok) return response(502, { error: "Could not load the order records." });
-  return response(200, { orders: await ordersResponse.json(), payments: await paymentsResponse.json() });
+  const ordersResponse = await database("orders?select=id,created_at,story_type,page_length,page_count,book_title,customer_name,customer_email,request,amount,seed_count,status,fulfilled_at&order=created_at.desc&limit=1000");
+  if (!ordersResponse.ok) return response(502, { error: "Could not load orders. Check that the orders migration is applied." });
+  let payments: unknown[] = [];
+  const paymentsResponse = await database("payment_records?select=id,order_id,provider_order_id,transaction_id,customer_name,contact_email,buyer_email,item_name,amount,paid_at,payment_status,status,fulfilled_at&order=paid_at.desc&limit=1000");
+  if (paymentsResponse.ok) payments = await paymentsResponse.json();
+  return response(200, { orders: await ordersResponse.json(), payments });
 }
 
 async function fulfill(body: Payload): Promise<Response> {

@@ -696,7 +696,7 @@ function configureOrderForm() {
     } catch (error) {
       console.error("Unable to create order", error);
       message.className = "form-message error-state";
-      message.textContent = "We could not save your request. Please try again in a moment.";
+      message.textContent = `We could not save your request: ${error.message || "Please try again in a moment."}`;
     } finally {
       submitButton.disabled = false;
       submitButton.removeAttribute("aria-busy");
@@ -793,7 +793,7 @@ async function submitBookOrder() {
   } catch (error) {
     console.error("Unable to create book order", error);
     message.className = "form-message error-state";
-    message.textContent = "We could not save your order. Please try again in a moment.";
+    message.textContent = `We could not save your order: ${error.message || "Please try again in a moment."}`;
   } finally {
     button.disabled = false;
     button.removeAttribute("aria-busy");

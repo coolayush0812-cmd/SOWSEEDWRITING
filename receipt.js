@@ -40,9 +40,13 @@ function receiptDate(value) {
 }
 
 function buildReceiptPdf(payment) {
-  if (payment.status !== "fulfilled" || payment.paymentStatus !== "COMPLETED" || !payment.fulfilledAt) {
-    throw new Error("A receipt is available only for a paid, fulfilled order.");
+  if (payment.status !== "fulfilled" || !payment.fulfilledAt || (payment.paymentStatus && payment.paymentStatus !== "COMPLETED")) {
+    throw new Error("A receipt is available only after an order is fulfilled.");
   }
+  const verifiedPayment = Boolean(payment.paymentStatus);
+  const item = payment.itemName || payment.bookTitle || payment.pageLength || "Personal writing request";
+  const orderDate = payment.paidAt || payment.createdAt;
+  const orderId = payment.orderId || payment.providerOrderId || payment.id || payment.transactionId;
 
   const commands = [];
   const navy = [0.063, 0.169, 0.337];
@@ -71,31 +75,31 @@ function buildReceiptPdf(payment) {
   drawText(43, 764, "ORDER RECEIPT", 10, true, [0.867, 0.918, 0.984]);
   commands.push(`${rgb(blue)} rg 0 733 595 4 re f`);
 
-  drawText(43, 697, "Thank you for your purchase.", 16, true);
+  drawText(43, 697, verifiedPayment ? "Thank you for your purchase." : "Thank you for your order.", 16, true);
   drawText(43, 675, "Your order has been fulfilled.", 10, false, muted);
   field(43, 635, "Order status", "Fulfilled");
-  label(340, 635, "Total paid");
+  label(340, 635, verifiedPayment ? "Total paid" : "Order total");
   drawText(340, 616, `$${Number(payment.amount).toFixed(2)} USD`, 14, true, navy);
   rule(597);
 
   drawText(43, 567, "PURCHASED ITEM", 9, true, blue);
-  drawLines(43, 542, payment.itemName, 68, 13);
+  drawLines(43, 542, item, 68, 13);
   drawText(43, 507, "Digital order  |  One-time purchase", 9, false, muted);
   rule(490);
 
   drawText(43, 465, "ORDER INFORMATION", 9, true, blue);
-  field(43, 440, "Customer", payment.customerName || "PayPal buyer");
-  field(318, 440, "Order date", receiptDate(payment.paidAt));
-  field(43, 390, "Order ID", payment.orderId || payment.providerOrderId || payment.transactionId);
-  field(318, 390, "Transaction ID", payment.transactionId);
-  field(43, 340, "Contact email", payment.contactEmail || payment.buyerEmail);
-  field(318, 340, "Buyer email", payment.buyerEmail);
+  field(43, 440, "Customer", payment.customerName || payment.name || payment.customer_name || "PayPal buyer");
+  field(318, 440, "Order date", receiptDate(orderDate));
+  field(43, 390, "Order ID", orderId);
+  field(318, 390, verifiedPayment ? "Transaction ID" : "Order type", verifiedPayment ? payment.transactionId : (payment.bookTitle ? "Book order" : "Personal request"));
+  field(43, 340, "Contact email", payment.contactEmail || payment.customer_email || payment.email || payment.buyerEmail);
+  field(318, 340, verifiedPayment ? "Buyer email" : "Fulfilled at", verifiedPayment ? payment.buyerEmail : receiptDate(payment.fulfilledAt));
   rule(308);
 
-  drawText(43, 282, "PAYMENT DETAILS", 9, true, blue);
-  field(43, 257, "Payment status", payment.paymentStatus);
-  field(318, 257, "Payment provider", "PayPal");
-  field(43, 207, "Provider order ID", payment.providerOrderId);
+  drawText(43, 282, verifiedPayment ? "PAYMENT DETAILS" : "FULFILLMENT DETAILS", 9, true, blue);
+  field(43, 257, verifiedPayment ? "Payment status" : "Order status", verifiedPayment ? payment.paymentStatus : "Fulfilled");
+  field(318, 257, verifiedPayment ? "Payment provider" : "Fulfillment method", verifiedPayment ? "PayPal" : "Manual email delivery");
+  field(43, 207, verifiedPayment ? "Provider order ID" : "Order ID", verifiedPayment ? payment.providerOrderId : orderId);
   field(318, 207, "Fulfilled at", receiptDate(payment.fulfilledAt));
   rule(174);
 
@@ -128,11 +132,19 @@ function buildReceiptPdf(payment) {
 }
 
 function downloadPaymentReceipt(payment) {
-  const bytes = buildReceiptPdf(payment);
+  downloadReceipt(payment, payment.orderId || payment.transactionId);
+}
+
+function downloadOrderReceipt(order) {
+  downloadReceipt(order, order.id);
+}
+
+function downloadReceipt(record, filenameId) {
+  const bytes = buildReceiptPdf(record);
   const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
   const anchor = document.createElement("a");
   anchor.href = url;
-  anchor.download = `receipt-${payment.orderId || payment.transactionId}.pdf`;
+  anchor.download = `receipt-${pdfPlain(filenameId || "order")}.pdf`;
   document.body.append(anchor);
   anchor.click();
   anchor.remove();
