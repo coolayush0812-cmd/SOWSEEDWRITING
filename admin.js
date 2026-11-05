@@ -29,9 +29,18 @@ async function adminApiRequest(action, fields = {}) {
   });
   const result = await response.json().catch(() => ({}));
   if (!response.ok) {
-    const error = new Error(result.error || "The admin service could not complete the request.");
+    const error = new Error(result.error || result.message || result.msg || result.code || "The admin service could not complete the request.");
     error.status = response.status;
     throw error;
+  }
+  if (action === "login" && typeof result.token !== "string") {
+    throw new Error("The admin URL is still serving the Supabase sample function. Deploy the admin-portal function to this Supabase project.");
+  }
+  if (action === "list" && !Array.isArray(result.orders)) {
+    throw new Error("The admin URL is not returning order records. Deploy the admin-portal function to this Supabase project.");
+  }
+  if (action === "change-password" && typeof result.token !== "string") {
+    throw new Error("The admin service did not confirm the password change. Deploy the admin-portal function and try again.");
   }
   return result;
 }

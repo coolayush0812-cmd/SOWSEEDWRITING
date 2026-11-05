@@ -1,11 +1,11 @@
-# Seed Garden Writings — Static Website
+# Sow Seed Writing — Website
 
 A fixed-screen three-column writing website. Each column scrolls independently while the page stays fitted to the viewport:
 
 - Left: 185 unique British, American, Chinese, and Japanese customer reviews with a dynamically calculated overall rating
 - Middle: 21 interactive flip books arranged in three series, with books sorted by price within each series
-- Right: personal request form or a book order form with price and customer contact fields
-- Admin: calendar of verified PayPal payments, saved book and writing requests, and fulfillment controls
+- Right: personalized writing request form or ebook order form
+- Admin: order calendar, customer details, fulfillment date/time, and order receipt PDF
 
 ## Files
 
@@ -37,9 +37,9 @@ Then visit `http://localhost:8000`.
 
 ## Payment setup
 
-Personal requests are stored in Supabase. Admin access uses one shared portal password, without Supabase Auth profiles. The password is entered on each device and can be changed in the portal; changing it invalidates existing sessions. The page slider runs from 10 to 130 pages. Pricing has eleven bands: 10–20 pages cost $11, 21–31 cost $22, and so on through 120–130 pages at $121. The personal request form still **does not collect money**. A saved request is not shown as a payment. The webhook records a PayPal payment only after PayPal verifies its completed capture event.
+Sow Seed Writing offers freelance fiction and nonfiction, personalized stories and scripts, and original copyright-free digital books. Personal requests are saved in Supabase and delivered by email within up to seven days. Ebook purchases are intended to provide immediate access and an emailed copy. Admin access uses one shared portal password, without Supabase Auth profiles. The password can be changed in the portal; changing it invalidates existing sessions.
 
-Book prices are listed in `BOOK_PRICES` in `script.js`. Customers place a book order with their name and email; the order is saved in Supabase for manual email delivery and fulfillment in the admin portal. No download or checkout link is required for this workflow. Personal requests are also saved as orders. Verified PayPal captures, when used, are recorded separately by the webhook.
+Book prices are listed in `BOOK_PRICES` in `script.js`. Personal writing prices use the selected page count. Both types of orders are saved in Supabase and shown by order date in the admin portal.
 
 ## Supabase setup
 
@@ -69,6 +69,6 @@ supabase functions deploy paypal-webhook
 
 Set the function secrets through the Supabase dashboard or `supabase secrets set` without committing their values. The admin function verifies its own signed sessions and password, so deploy it with gateway JWT verification disabled. Do not create or invite Supabase Auth admin users for this portal.
 
-Once the function is deployed and the PayPal webhook is active, a completed USD capture is inserted into `payment_records` and appears on its payment date in the admin calendar. PayPal signature verification and unique transaction/event IDs prevent unverified or duplicate records. The receipt PDF becomes available after the admin enters the fulfillment date and time. The receipt is generated from the verified payment record.
+Once deployed, the admin function returns order records and saves fulfillment dates. A receipt PDF becomes available after an order is marked fulfilled. PayPal payment capture is separate from the order form and requires a configured checkout.
 
-Book orders are saved for manual email delivery and can be marked fulfilled with a date and time in the admin portal. The webhook records verified PayPal captures separately; it does not create a PayPal checkout on the site by itself.
+The order form records customer selections and contact information. Instant ebook access requires the ebook files and a connected checkout to be configured for the live site.

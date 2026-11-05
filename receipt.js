@@ -71,7 +71,7 @@ function buildReceiptPdf(payment) {
 
   commands.push(`${rgb(white)} rg 0 0 595 842 re f`);
   commands.push(`${rgb(navy)} rg 0 737 595 105 re f`);
-  drawText(43, 789, "SOWSEEDWRITING", 20, true, white);
+  drawText(43, 789, "SOW SEED WRITING", 20, true, white);
   drawText(43, 764, "ORDER RECEIPT", 10, true, [0.867, 0.918, 0.984]);
   commands.push(`${rgb(blue)} rg 0 733 595 4 re f`);
 
@@ -106,7 +106,7 @@ function buildReceiptPdf(payment) {
   drawText(43, 148, "FULFILLMENT NOTE", 9, true, blue);
   drawLines(43, 128, "This order was marked fulfilled at the date and time shown above.", 82, 9);
   rule(68);
-  drawText(43, 48, "SOWSEEDWRITING", 9, true, navy);
+  drawText(43, 48, "SOW SEED WRITING", 9, true, navy);
   drawText(438, 48, "Merchant-issued receipt", 8, false, muted);
 
   const stream = commands.join("\n") + "\n";
