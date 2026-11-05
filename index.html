@@ -131,7 +131,25 @@
         <div class="book-purchase" id="book-purchase" hidden>
           <h3 id="selected-book-name"></h3>
           <p id="selected-book-summary"></p>
-          <button class="pay-button book-buy-button" id="book-buy-button" type="button" disabled><span id="book-buy-label">Buy Book</span><span aria-hidden="true">→</span></button>
+          <div class="book-customer-fields">
+            <div class="field-group">
+              <div class="input-wrap">
+                <span aria-hidden="true">👤</span>
+                <input id="book-customer-name" type="text" autocomplete="name" aria-label="Name" placeholder="Your full name" required />
+              </div>
+              <small class="error" id="book-name-error"></small>
+            </div>
+            <div class="field-group">
+              <div class="input-wrap">
+                <span aria-hidden="true">✉</span>
+                <input id="book-customer-email" type="email" autocomplete="email" aria-label="Email" placeholder="Your email address" required />
+              </div>
+              <small class="error" id="book-email-error"></small>
+            </div>
+          </div>
+          <button class="pay-button book-buy-button" id="book-buy-button" type="button"><span id="book-buy-label">Place book order</span><span aria-hidden="true">→</span></button>
+          <p class="secure-note">We’ll email your book after you place the order.</p>
+          <div id="book-order-message" class="form-message" role="status" aria-live="polite"></div>
         </div>
 
         <div class="checkout-footer" id="checkout-footer">
@@ -160,14 +178,12 @@
       <button class="admin-close" type="button" data-admin-close aria-label="Close admin portal">×</button>
 
       <div class="admin-login" id="admin-login">
-        <div class="admin-icon" aria-hidden="true">🔐</div>
-        <span class="eyebrow">Private access</span>
+        <div class="admin-icon" aria-hidden="true">🌱</div>
+        <span class="eyebrow">Simple admin access</span>
         <h2 id="admin-title">Admin Portal</h2>
-        <p>Sign in securely to review and manage incoming orders.</p>
+        <p>Enter your shared portal password to review and manage orders from any device.</p>
         <form id="admin-login-form" novalidate>
-          <label for="admin-email">Email</label>
-          <input id="admin-email" type="email" autocomplete="username" value="sowseed@gmail.com" required />
-          <label for="admin-password">Password</label>
+          <label for="admin-password">Portal password</label>
           <input id="admin-password" type="password" autocomplete="current-password" required />
           <button class="admin-login-button" type="submit">Open dashboard</button>
           <p class="admin-login-error" id="admin-login-error" role="alert"></p>
@@ -182,6 +198,7 @@
           </div>
           <div class="admin-head-actions">
             <button class="admin-reload" id="admin-reload" type="button">↻ Reload data</button>
+            <button class="admin-signout" id="admin-change-password" type="button">Change password</button>
             <button class="admin-signout" id="admin-signout" type="button">Sign out</button>
           </div>
         </div>
@@ -225,8 +242,8 @@
             <div class="activity-list" id="activity-list"></div>
             <p class="admin-status" id="admin-status" role="status" aria-live="polite"></p>
             <div class="request-section">
-              <h4>Writing requests</h4>
-              <p>Requests are listed separately until a payment is verified.</p>
+              <h4>Book orders &amp; personal requests</h4>
+              <p>Book orders are sent by email and can be marked fulfilled here.</p>
               <div class="request-list" id="request-list"></div>
             </div>
           </section>
@@ -246,6 +263,26 @@
             <div class="fulfill-actions">
               <button id="fulfill-cancel" type="button">Cancel</button>
               <button id="fulfill-confirm" type="submit">Mark fulfilled</button>
+            </div>
+          </form>
+        </div>
+      </section>
+
+      <section class="fulfill-modal" id="password-modal" role="dialog" aria-modal="true" aria-labelledby="password-title" hidden>
+        <div class="fulfill-modal-card">
+          <h2 id="password-title">Change portal password</h2>
+          <p>The new password will work for everyone using this admin portal.</p>
+          <form id="password-form">
+            <label for="current-admin-password">Current password</label>
+            <input id="current-admin-password" type="password" autocomplete="current-password" required />
+            <label for="new-admin-password">New password</label>
+            <input id="new-admin-password" type="password" autocomplete="new-password" minlength="10" required />
+            <label for="confirm-admin-password">Confirm new password</label>
+            <input id="confirm-admin-password" type="password" autocomplete="new-password" minlength="10" required />
+            <p class="fulfill-error" id="password-error" role="alert"></p>
+            <div class="fulfill-actions">
+              <button id="password-cancel" type="button">Cancel</button>
+              <button id="password-confirm" type="submit">Update password</button>
             </div>
           </form>
         </div>

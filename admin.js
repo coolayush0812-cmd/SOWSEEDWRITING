@@ -5,9 +5,36 @@ const adminState = {
   selectedDate: null,
   calendarCursor: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
   pendingPaymentId: null,
+  pendingOrderId: null,
   returnFocus: null,
   lastFocusedElement: null,
 };
+const ADMIN_SESSION_KEY = "seed-garden-admin-session";
+
+function adminSessionToken() {
+  return localStorage.getItem(ADMIN_SESSION_KEY) || "";
+}
+
+async function adminApiRequest(action, fields = {}) {
+  if (!supabaseConfig?.url || !supabaseConfig?.publicKey) throw new Error("The admin service is not configured.");
+  const token = adminSessionToken();
+  const response = await fetch(`${supabaseConfig.url}/functions/v1/admin-portal`, {
+    method: "POST",
+    headers: {
+      apikey: supabaseConfig.publicKey,
+      authorization: `Bearer ${token || supabaseConfig.publicKey}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ action, ...fields }),
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const error = new Error(result.error || "The admin service could not complete the request.");
+    error.status = response.status;
+    throw error;
+  }
+  return result;
+}
 
 function localDateKey(value) {
   const date = new Date(value);
@@ -48,22 +75,6 @@ function mapPayment(row) {
   };
 }
 
-async function loadPaymentRecords() {
-  const client = requireSupabase();
-  const payments = [];
-  const pageSize = 500;
-  for (let offset = 0; ; offset += pageSize) {
-    const { data, error } = await client.from("payment_records")
-      .select("id, order_id, provider_order_id, transaction_id, customer_name, contact_email, buyer_email, item_name, amount, paid_at, payment_status, status, fulfilled_at")
-      .order("paid_at", { ascending: false })
-      .range(offset, offset + pageSize - 1);
-    if (error) throw error;
-    payments.push(...(data || []).map(mapPayment));
-    if (!data || data.length < pageSize) break;
-  }
-  return payments;
-}
-
 function setAdminStatus(message, isError = false) {
   const status = document.querySelector("#admin-status");
   status.textContent = message;
@@ -73,22 +84,24 @@ function setAdminStatus(message, isError = false) {
 async function renderAdmin() {
   if (document.querySelector("#admin-dashboard").hidden) return;
   setAdminStatus("Loading payment and request records…");
-  const [paymentResult, requestResult] = await Promise.allSettled([loadPaymentRecords(), loadOrders()]);
-
-  if (paymentResult.status === "fulfilled") {
-    adminState.payments = paymentResult.value;
+  try {
+    const records = await adminApiRequest("list");
+    adminState.payments = (records.payments || []).map(mapPayment);
+    state.orders = (records.orders || []).map(mapOrder);
     adminState.paymentError = null;
-  } else {
-    adminState.payments = [];
-    adminState.paymentError = paymentResult.reason;
-    console.error("Unable to load payment records", paymentResult.reason);
-  }
-  if (requestResult.status === "fulfilled") {
     adminState.requestError = null;
-  } else {
-    state.orders = [];
-    adminState.requestError = requestResult.reason;
-    console.error("Unable to load writing requests", requestResult.reason);
+  } catch (error) {
+    adminState.paymentError = error;
+    adminState.requestError = error;
+    console.error("Unable to load admin records", error);
+    if (error.status === 401) {
+      localStorage.removeItem(ADMIN_SESSION_KEY);
+      showAdminLogin();
+      document.querySelector("#admin-login-error").textContent = error.message;
+      return;
+    }
+    setAdminStatus(error.message, true);
+    return;
   }
 
   renderAdminCalendar();
@@ -96,7 +109,7 @@ async function renderAdmin() {
   renderPaymentActivity();
   renderWritingRequests();
   if (adminState.paymentError || adminState.requestError) {
-    setAdminStatus("Some records could not be loaded. Check the Supabase migrations and connection.", true);
+    setAdminStatus("Some records could not be loaded. Please try again.", true);
   } else {
     setAdminStatus(`Updated ${adminDateTime(new Date())}`);
   }
@@ -206,14 +219,17 @@ function renderWritingRequests() {
   const linked = new Set(adminState.payments.map((payment) => payment.orderId).filter(Boolean));
   const requests = state.orders.filter((order) => !linked.has(order.id));
   document.querySelector("#request-list").innerHTML = requests.length
-    ? requests.slice(0, 8).map((order) => `<article class="request-card"><div><strong>${escapeHtml(order.name)}</strong><span>${escapeHtml(order.pageLength)} · ${adminMoney(order.amount)} quoted</span></div><small>${escapeHtml(adminDateTime(order.createdAt))}</small><p>${escapeHtml(order.request)}</p></article>`).join("")
-    : '<div class="empty-orders">No writing requests awaiting a matching payment.</div>';
+    ? requests.slice(0, 20).map((order) => `<article class="request-card"><div><strong>${escapeHtml(order.name)}</strong><span>${escapeHtml(order.bookTitle || order.pageLength)} · ${adminMoney(order.amount)}</span></div><small>${escapeHtml(adminDateTime(order.createdAt))} · ${escapeHtml(order.email)}</small><p>${escapeHtml(order.bookTitle ? `Book order: ${order.bookTitle}` : order.request)}</p><div class="request-card-actions"><span>${order.status === "fulfilled" ? `✓ Fulfilled ${escapeHtml(adminDateTime(order.fulfilledAt))}` : "Unfulfilled"}</span><button type="button" data-action="fulfill-order" data-id="${escapeHtml(order.id)}" ${order.status === "fulfilled" ? "disabled" : ""}>${order.status === "fulfilled" ? "Fulfilled" : "Mark fulfilled"}</button></div></article>`).join("")
+    : '<div class="empty-orders">No orders or writing requests yet.</div>';
 }
 
-function openFulfillModal(paymentId, trigger) {
-  const payment = adminState.payments.find((item) => item.id === paymentId);
-  if (!payment || payment.status === "fulfilled" || payment.paymentStatus !== "COMPLETED") return;
-  adminState.pendingPaymentId = paymentId;
+function openFulfillModal(id, trigger, kind = "payment") {
+  const payment = kind === "payment" ? adminState.payments.find((item) => item.id === id) : null;
+  const order = kind === "order" ? state.orders.find((item) => item.id === id) : null;
+  if (kind === "payment" && (!payment || payment.status === "fulfilled" || payment.paymentStatus !== "COMPLETED")) return;
+  if (kind === "order" && (!order || order.status === "fulfilled")) return;
+  adminState.pendingPaymentId = payment?.id || null;
+  adminState.pendingOrderId = order?.id || null;
   adminState.returnFocus = trigger;
   const now = new Date();
   document.querySelector("#fulfilled-date").value = localDateKey(now);
@@ -231,6 +247,7 @@ function closeFulfillModal(restoreFocus = true) {
   modal.hidden = true;
   document.querySelector("#admin-dashboard").inert = false;
   adminState.pendingPaymentId = null;
+  adminState.pendingOrderId = null;
   if (restoreFocus) (adminState.returnFocus?.isConnected ? adminState.returnFocus : document.querySelector("#admin-reload")).focus();
   adminState.returnFocus = null;
 }
@@ -238,14 +255,16 @@ function closeFulfillModal(restoreFocus = true) {
 async function submitFulfillment(event) {
   event.preventDefault();
   const payment = adminState.payments.find((item) => item.id === adminState.pendingPaymentId);
-  if (!payment) return;
+  const order = state.orders.find((item) => item.id === adminState.pendingOrderId);
+  if (!payment && !order) return;
   const date = document.querySelector("#fulfilled-date").value;
   const time = document.querySelector("#fulfilled-time").value;
   const fulfilledAt = new Date(`${date}T${time}:00`);
   const error = document.querySelector("#fulfill-error");
   error.textContent = "";
-  if (!date || !time || Number.isNaN(fulfilledAt.getTime()) || fulfilledAt < new Date(payment.paidAt) || fulfilledAt > new Date()) {
-    error.textContent = "Choose a valid date and time between the payment and now.";
+  const startDate = new Date(payment?.paidAt || order?.createdAt);
+  if (!date || !time || Number.isNaN(fulfilledAt.getTime()) || fulfilledAt < startDate || fulfilledAt > new Date()) {
+    error.textContent = "Choose a valid date and time after the order and before now.";
     return;
   }
 
@@ -253,16 +272,16 @@ async function submitFulfillment(event) {
   button.disabled = true;
   button.textContent = "Saving…";
   try {
-    const client = requireSupabase();
-    const { data, error: updateError } = await client.from("payment_records")
-      .update({ status: "fulfilled", fulfilled_at: fulfilledAt.toISOString() })
-      .eq("id", payment.id).eq("status", "unfulfilled").select("id").single();
-    if (updateError || !data) throw updateError || new Error("The payment could not be updated.");
+    await adminApiRequest("fulfill", {
+      kind: payment ? "payment" : "order",
+      id: payment?.id || order.id,
+      fulfilledAt: fulfilledAt.toISOString(),
+    });
     closeFulfillModal(false);
     await renderAdmin();
     document.querySelector("#admin-reload").focus();
   } catch (saveError) {
-    console.error("Unable to mark payment fulfilled", saveError);
+    console.error("Unable to mark order fulfilled", saveError);
     error.textContent = "Could not save fulfillment. Please try again.";
   } finally {
     button.disabled = false;
@@ -278,35 +297,63 @@ function configureAdminPortal() {
   document.querySelector("#admin-open").addEventListener("click", openAdmin);
   document.querySelectorAll("[data-admin-close]").forEach((button) => button.addEventListener("click", closeAdmin));
   document.querySelector("#admin-reload").addEventListener("click", renderAdmin);
-  document.querySelector("#admin-signout").addEventListener("click", async () => {
-    if (supabaseClient) await supabaseClient.auth.signOut();
+  document.querySelector("#admin-signout").addEventListener("click", () => {
+    localStorage.removeItem(ADMIN_SESSION_KEY);
     adminState.payments = [];
     state.orders = [];
     showAdminLogin();
   });
 
+  document.querySelector("#admin-change-password").addEventListener("click", () => {
+    document.querySelector("#current-admin-password").value = "";
+    document.querySelector("#new-admin-password").value = "";
+    document.querySelector("#confirm-admin-password").value = "";
+    document.querySelector("#password-error").textContent = "";
+    document.querySelector("#admin-dashboard").inert = true;
+    document.querySelector("#password-modal").hidden = false;
+    document.querySelector("#current-admin-password").focus();
+  });
+  document.querySelector("#password-cancel").addEventListener("click", closePasswordModal);
+  document.querySelector("#password-form").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const currentPassword = document.querySelector("#current-admin-password").value;
+    const newPassword = document.querySelector("#new-admin-password").value;
+    const confirmPassword = document.querySelector("#confirm-admin-password").value;
+    const error = document.querySelector("#password-error");
+    if (newPassword.length < 10) { error.textContent = "Use at least 10 characters for the new password."; return; }
+    if (newPassword !== confirmPassword) { error.textContent = "The new passwords do not match."; return; }
+    const button = document.querySelector("#password-confirm");
+    button.disabled = true;
+    button.textContent = "Updating…";
+    error.textContent = "";
+    try {
+      const result = await adminApiRequest("change-password", { currentPassword, newPassword });
+      localStorage.setItem(ADMIN_SESSION_KEY, result.token);
+      closePasswordModal();
+      setAdminStatus("Portal password updated.");
+    } catch (changeError) {
+      error.textContent = changeError.message;
+    } finally {
+      button.disabled = false;
+      button.textContent = "Update password";
+    }
+  });
+
   loginForm.addEventListener("submit", async (event) => {
     event.preventDefault();
-    const email = document.querySelector("#admin-email").value.trim().toLowerCase();
     const password = document.querySelector("#admin-password").value;
     const error = document.querySelector("#admin-login-error");
     const button = loginForm.querySelector(".admin-login-button");
     error.textContent = "";
     button.disabled = true;
-    button.textContent = "Signing in…";
+    button.textContent = "Opening…";
     try {
-      const client = requireSupabase();
-      const { data, error: authError } = await client.auth.signInWithPassword({ email, password });
-      if (authError) throw authError;
-      if (data.user?.email?.toLowerCase() !== ADMIN_EMAIL) {
-        await client.auth.signOut();
-        throw new Error("This account does not have admin access.");
-      }
+      const result = await adminApiRequest("login", { password });
+      localStorage.setItem(ADMIN_SESSION_KEY, result.token);
       loginForm.reset();
       await showAdminDashboard();
-    } catch (authError) {
-      console.error("Admin sign-in failed", authError);
-      error.textContent = "Sign-in failed. Check the account and password.";
+    } catch (loginError) {
+      error.textContent = loginError.message;
     } finally {
       button.disabled = false;
       button.textContent = "Open dashboard";
@@ -343,12 +390,18 @@ function configureAdminPortal() {
       catch (error) { console.error("Receipt download failed", error); setAdminStatus("The receipt could not be downloaded.", true); }
     }
   });
+  document.querySelector("#request-list").addEventListener("click", (event) => {
+    const action = event.target.closest('button[data-action="fulfill-order"]');
+    if (!action || action.disabled) return;
+    openFulfillModal(action.dataset.id, action, "order");
+  });
   document.querySelector("#fulfill-cancel").addEventListener("click", () => closeFulfillModal());
   document.querySelector("#fulfill-form").addEventListener("submit", submitFulfillment);
 
   document.addEventListener("keydown", (event) => {
     if (event.key !== "Escape" || portal.hidden) return;
     if (!document.querySelector("#fulfill-modal").hidden) closeFulfillModal();
+    else if (!document.querySelector("#password-modal").hidden) closePasswordModal();
     else closeAdmin();
   });
 }
@@ -366,20 +419,17 @@ async function openAdmin() {
   adminState.lastFocusedElement = document.activeElement;
   document.querySelector(".page-shell").inert = true;
   document.querySelector("#admin-portal").hidden = false;
-  try {
-    const { data } = supabaseClient ? await supabaseClient.auth.getSession() : { data: { session: null } };
-    if (data.session?.user?.email?.toLowerCase() === ADMIN_EMAIL) {
-      await showAdminDashboard();
-      return;
-    }
-  } catch (error) {
-    console.error("Unable to restore admin session", error);
+  if (adminSessionToken()) {
+    await showAdminDashboard();
+    return;
   }
   showAdminLogin();
 }
 
 function closeAdmin() {
   closeFulfillModal(false);
+  document.querySelector("#password-modal").hidden = true;
+  document.querySelector("#admin-dashboard").inert = false;
   document.querySelector("#admin-portal").hidden = true;
   document.querySelector(".page-shell").inert = false;
   adminState.lastFocusedElement?.focus();
@@ -388,7 +438,7 @@ function closeAdmin() {
 function showAdminLogin() {
   document.querySelector("#admin-login").hidden = false;
   document.querySelector("#admin-dashboard").hidden = true;
-  requestAnimationFrame(() => document.querySelector("#admin-email").focus());
+  requestAnimationFrame(() => document.querySelector("#admin-password").focus());
 }
 
 async function showAdminDashboard() {
@@ -396,4 +446,10 @@ async function showAdminDashboard() {
   document.querySelector("#admin-dashboard").hidden = false;
   await renderAdmin();
   requestAnimationFrame(() => document.querySelector("#admin-reload").focus());
+}
+
+function closePasswordModal() {
+  document.querySelector("#password-modal").hidden = true;
+  document.querySelector("#admin-dashboard").inert = false;
+  document.querySelector("#admin-change-password").focus();
 }

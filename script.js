@@ -241,9 +241,6 @@ const BOOK_SERIES = [
   { key: "faith", category: "Faith-Based Stories", title: "Whispers of Grace", subtitle: "The Faith & Promise Collection" }
 ];
 
-// Add each book's checkout or free download URL here when available.
-const BOOK_CHECKOUT_URLS = {};
-
 const BRITISH_FIRST_NAMES = [
   "Amelia", "Oliver", "Isla", "George", "Florence", "Arthur", "Poppy", "Harry", "Imogen", "Jack",
   "Beatrice", "Alfie", "Matilda", "Freddie", "Evie", "Henry", "Harriet", "Theo", "Alice", "Edward",
@@ -400,11 +397,10 @@ const EAST_ASIAN_REVIEWS = EAST_ASIAN_REVIEWER_NAMES.map((reviewer, index) => {
 
 const REVIEWS = [...WESTERN_REVIEWS, ...EAST_ASIAN_REVIEWS];
 
-const ADMIN_EMAIL = "sowseed@gmail.com";
 const supabaseConfig = window.SEED_GARDEN_SUPABASE;
 const supabaseClient = window.supabase && supabaseConfig?.url && supabaseConfig?.publicKey
   ? window.supabase.createClient(supabaseConfig.url, supabaseConfig.publicKey, {
-      auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
+      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
     })
   : null;
 
@@ -590,10 +586,10 @@ function showOrderMode(bookTitle = "") {
   const buyButton = document.querySelector("#book-buy-button");
   const price = BOOK_PRICES[bookTitle];
   document.querySelector("#book-buy-label").textContent = price === 0
-    ? "Get Free Book"
-    : `Buy Book — $${price}`;
-  buyButton.disabled = !BOOK_CHECKOUT_URLS[bookTitle];
-  buyButton.title = buyButton.disabled ? "Checkout link coming soon" : "";
+    ? "Place free book order"
+    : `Place book order · $${price}`;
+  buyButton.disabled = false;
+  buyButton.title = "";
 }
 
 function priceForPageCount(pageCount) {
@@ -620,10 +616,7 @@ function configureOrderForm() {
     bookSelect.append(group);
   });
   bookSelect.addEventListener("change", () => showOrderMode(bookSelect.value));
-  document.querySelector("#book-buy-button").addEventListener("click", () => {
-    const url = BOOK_CHECKOUT_URLS[bookSelect.value];
-    if (url) window.location.assign(url);
-  });
+  document.querySelector("#book-buy-button").addEventListener("click", submitBookOrder);
   document.querySelector("#personal-request-choice").addEventListener("click", () => {
     bookSelect.value = "";
     showOrderMode();
@@ -729,6 +722,7 @@ async function createOrder(order) {
     story_type: order.storyType,
     page_length: order.pageLength,
     page_count: order.pageCount,
+    book_title: order.bookTitle || null,
     customer_name: order.name,
     customer_email: order.email,
     request: order.request,
@@ -739,6 +733,73 @@ async function createOrder(order) {
   if (error) throw error;
 }
 
+async function submitBookOrder() {
+  const title = document.querySelector("#book-select").value;
+  const nameField = document.querySelector("#book-customer-name");
+  const emailField = document.querySelector("#book-customer-email");
+  const name = nameField.value.trim();
+  const email = emailField.value.trim();
+  const message = document.querySelector("#book-order-message");
+  const button = document.querySelector("#book-buy-button");
+  const nameError = document.querySelector("#book-name-error");
+  const emailError = document.querySelector("#book-email-error");
+  nameError.textContent = "";
+  emailError.textContent = "";
+  message.textContent = "";
+  message.className = "form-message";
+
+  let valid = true;
+  if (!title || !(title in BOOK_PRICES)) {
+    message.className = "form-message error-state";
+    message.textContent = "Choose a book from the library first.";
+    return;
+  }
+  if (!name) {
+    nameError.textContent = "Please enter your name.";
+    valid = false;
+  }
+  if (!/^\S+@\S+\.\S+$/.test(email)) {
+    emailError.textContent = "Please enter a valid email address.";
+    valid = false;
+  }
+  if (!valid) return;
+
+  const now = new Date();
+  const order = {
+    id: createOrderId(now),
+    createdAt: now.toISOString(),
+    storyType: "Book Order",
+    pageLength: "Book",
+    pageCount: null,
+    bookTitle: title,
+    name,
+    email,
+    request: `Book order: ${title}`,
+    amount: BOOK_PRICES[title],
+    seedCount: null,
+    status: "pending"
+  };
+
+  button.disabled = true;
+  button.setAttribute("aria-busy", "true");
+  message.className = "form-message success";
+  message.textContent = "Saving your book order…";
+  try {
+    await createOrder(order);
+    message.textContent = `Order ${order.id} received. We’ll email your book to ${email}.`;
+    nameField.value = "";
+    emailField.value = "";
+    if (!document.querySelector("#admin-dashboard").hidden) await renderAdmin();
+  } catch (error) {
+    console.error("Unable to create book order", error);
+    message.className = "form-message error-state";
+    message.textContent = "We could not save your order. Please try again in a moment.";
+  } finally {
+    button.disabled = false;
+    button.removeAttribute("aria-busy");
+  }
+}
+
 function mapOrder(row) {
   return {
     id: row.id,
@@ -746,6 +807,7 @@ function mapOrder(row) {
     storyType: row.story_type,
     pageLength: row.page_length,
     pageCount: row.page_count == null ? null : Number(row.page_count),
+    bookTitle: row.book_title || null,
     name: row.customer_name,
     email: row.customer_email,
     request: row.request,
@@ -754,18 +816,6 @@ function mapOrder(row) {
     status: row.status,
     fulfilledAt: row.fulfilled_at
   };
-}
-
-async function loadOrders() {
-  const client = requireSupabase();
-  const { data, error } = await client
-    .from("orders")
-    .select("id, created_at, story_type, page_length, page_count, customer_name, customer_email, request, amount, seed_count, status, fulfilled_at")
-    .order("created_at", { ascending: false });
-
-  if (error) throw error;
-  state.orders = (data || []).map(mapOrder);
-  return state.orders;
 }
 
 document.addEventListener("DOMContentLoaded", () => {

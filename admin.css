@@ -208,6 +208,9 @@
 .request-card div span { color: #8f8066; }
 .request-card > small { display: block; margin-top: 4px; color: #8f8066; font-size: 10px; }
 .request-card p { margin: 8px 0 0; overflow-wrap: anywhere; color: #554d40; font-size: 11px; }
+.request-card-actions { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 10px; color: #8f8066; font-size: 10px; }
+.request-card-actions button { border: 0; border-radius: 99px; padding: 7px 10px; background: #8a704d; color: #fff; font-weight: 700; cursor: pointer; }
+.request-card-actions button:disabled { background: #eee9df; color: #6e665c; cursor: default; }
 
 .fulfill-modal { position: absolute; inset: 0; z-index: 5; display: grid; place-items: center; padding: 20px; background: rgba(36, 30, 21, .58); }
 .fulfill-modal-card { width: min(420px, 100%); padding: 28px; border-radius: 19px; background: #fffaf1; box-shadow: 0 20px 60px rgba(0,0,0,.24); }
