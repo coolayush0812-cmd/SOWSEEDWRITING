@@ -10,6 +10,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="admin.css" />
 </head>
 <body>
   <div class="page-shell">
@@ -63,7 +64,7 @@
         <div class="library-header">
           <span class="eyebrow">The Seed Garden Writings library</span>
           <h2 id="library-title">Stories to keep</h2>
-          <p>Explore 21 original works. Tap a cover to read the short story on its back.</p>
+          <p>Explore three series, each sorted by price. Tap a cover to read the short story on its back.</p>
         </div>
         <div class="library-catalog" id="library-catalog"></div>
       </section>
@@ -71,81 +72,69 @@
       <!-- RIGHT: ORDER / PAYMENT -->
       <section class="panel checkout-panel" id="order" aria-labelledby="checkout-title">
         <div class="checkout-header">
-          <span class="eyebrow">Personal request form</span>
+          <span class="eyebrow" id="checkout-eyebrow">Personal request form</span>
           <h2 id="checkout-title">Start Your Order</h2>
-          <p>Choose your story, share the details, and submit your request.</p>
+          <p id="checkout-intro">Choose a personal request or a book from the library.</p>
         </div>
-        <form id="payment-form" novalidate>
-          <fieldset class="choice-section">
-            <legend>Type of Story</legend>
-            <div class="type-options" role="group" aria-label="Type of story">
-              <button class="choice-button type-choice active" type="button" data-value="Personal Request" aria-pressed="true">Personal Request</button>
-              <button class="choice-button type-choice" type="button" data-value="Faith Based (Prayer / Inspiration)" aria-pressed="false">Faith Based <small>Prayer / Inspiration</small></button>
-              <button class="choice-button type-choice" type="button" data-value="Motivational" aria-pressed="false">Motivational</button>
-              <button class="choice-button type-choice" type="button" data-value="Surprise Me" aria-pressed="false">Surprise Me</button>
-            </div>
-            <input id="story-type" name="storyType" type="hidden" value="Personal Request" />
-          </fieldset>
+        <div class="choice-section story-selection" role="group" aria-labelledby="story-selection-title">
+          <span class="selection-label" id="story-selection-title">Type of Story</span>
+          <div class="story-options">
+            <button class="choice-button personal-choice active" id="personal-request-choice" type="button" aria-pressed="true">Personal Request</button>
+            <select id="book-select" name="bookSelect" aria-label="Choose a book">
+              <option value="">Select a book</option>
+            </select>
+          </div>
+        </div>
 
-          <fieldset class="choice-section">
-            <legend>Pages</legend>
-            <div class="page-options" role="group" aria-label="Number of pages">
-              <button class="choice-button page-choice active" type="button" data-value="1–3 pages (Short)" aria-pressed="true"><strong>1–3</strong><small>Short</small></button>
-              <button class="choice-button page-choice" type="button" data-value="3–5 pages (Medium)" aria-pressed="false"><strong>3–5</strong><small>Medium</small></button>
-              <button class="choice-button page-choice" type="button" data-value="Custom" aria-pressed="false"><strong>Custom</strong><small>Enter pages</small></button>
+        <form id="payment-form" novalidate>
+          <input id="story-type" name="storyType" type="hidden" value="Personal Request" />
+
+          <div class="choice-section page-slider-section">
+            <div class="page-slider-heading">
+              <output id="page-count-value" for="page-count">10 pages</output>
+              <output id="page-price" for="page-count" aria-label="Price">$11</output>
             </div>
-            <div class="custom-pages-wrap" id="custom-pages-wrap" hidden>
-              <label for="custom-pages">Custom page count</label>
-              <input id="custom-pages" name="customPages" type="number" min="1" max="100" placeholder="e.g. 8" />
-            </div>
-            <input id="page-length" name="pageLength" type="hidden" value="1–3 pages (Short)" />
+            <input id="page-count" name="pageCount" type="range" min="10" max="130" step="1" value="10" aria-label="Pages" aria-describedby="page-price" />
+            <div class="page-slider-scale"><span>10 pages</span><span>130 pages</span></div>
             <small class="error" data-error-for="pages"></small>
-          </fieldset>
+          </div>
 
           <div class="field-group">
-            <label for="name">Name</label>
             <div class="input-wrap">
               <span aria-hidden="true">👤</span>
-              <input id="name" name="name" type="text" autocomplete="name" placeholder="Your full name" required />
+              <input id="name" name="name" type="text" autocomplete="name" aria-label="Name" placeholder="Your full name" required />
             </div>
             <small class="error" data-error-for="name"></small>
           </div>
 
           <div class="field-group">
-            <label for="email">Email</label>
             <div class="input-wrap">
               <span aria-hidden="true">✉</span>
-              <input id="email" name="email" type="email" autocomplete="email" placeholder="you@example.com" required />
+              <input id="email" name="email" type="email" autocomplete="email" aria-label="Email" placeholder="you@example.com" required />
             </div>
             <small class="error" data-error-for="email"></small>
           </div>
 
           <div class="field-group">
-            <label for="request">Your request</label>
-            <textarea id="request" name="request" rows="5" placeholder="Tell us who it is for, the tone, important moments, and anything you would like included..." required></textarea>
+            <textarea id="request" name="request" rows="5" aria-label="Your request" placeholder="Tell us who this story is for, the story behind it, and everything on your mind. Share the moments that matter—we’ll craft something unforgettable just for you..." required></textarea>
             <small class="error" data-error-for="request"></small>
           </div>
-
-          <fieldset class="choice-section amount-section">
-            <legend>Choose your seeds</legend>
-            <div class="amount-options" role="group" aria-label="Amount">
-              <button class="choice-button amount-choice" type="button" data-value="7" data-seeds="1" aria-pressed="false"><strong>1 Seed</strong><small>$7</small></button>
-              <button class="choice-button amount-choice active" type="button" data-value="14" data-seeds="2" aria-pressed="true"><strong>2 Seeds</strong><small>$14</small></button>
-              <button class="choice-button amount-choice" type="button" data-value="21" data-seeds="3" aria-pressed="false"><strong>3 Seeds</strong><small>$21</small></button>
-            </div>
-            <input id="amount" name="amount" type="hidden" value="14" />
-            <input id="seed-count" name="seedCount" type="hidden" value="2" />
-          </fieldset>
 
           <button class="pay-button" type="submit">
             <span>Get Your Personalised Story</span>
             <span aria-hidden="true">→</span>
           </button>
-          <p class="secure-note">Seed is Transaction one Seed Account for One Personal Custom Writing</p>
+          <p class="secure-note">Submitting this request does not charge you. We’ll confirm payment details before your story begins.</p>
           <div id="form-message" class="form-message" role="status" aria-live="polite"></div>
         </form>
 
-        <div class="checkout-footer">
+        <div class="book-purchase" id="book-purchase" hidden>
+          <h3 id="selected-book-name"></h3>
+          <p id="selected-book-summary"></p>
+          <button class="pay-button book-buy-button" id="book-buy-button" type="button" disabled><span id="book-buy-label">Buy Book</span><span aria-hidden="true">→</span></button>
+        </div>
+
+        <div class="checkout-footer" id="checkout-footer">
           <div><span>✓</span> Original writing</div>
           <div><span>✓</span> Private request</div>
           <div><span>✓</span> Digital delivery</div>
@@ -177,7 +166,7 @@
         <p>Sign in securely to review and manage incoming orders.</p>
         <form id="admin-login-form" novalidate>
           <label for="admin-email">Email</label>
-          <input id="admin-email" type="email" autocomplete="username" required />
+          <input id="admin-email" type="email" autocomplete="username" value="sowseed@gmail.com" required />
           <label for="admin-password">Password</label>
           <input id="admin-password" type="password" autocomplete="current-password" required />
           <button class="admin-login-button" type="submit">Open dashboard</button>
@@ -188,47 +177,78 @@
       <div class="admin-dashboard" id="admin-dashboard" hidden>
         <div class="admin-dashboard-head">
           <div>
-            <span class="eyebrow">Seed Garden Writings admin</span>
-            <h2>Orders</h2>
+            <span class="eyebrow">Admin portal</span>
+            <h2>Order controls</h2>
           </div>
-          <button class="admin-signout" id="admin-signout" type="button">Sign out</button>
+          <div class="admin-head-actions">
+            <button class="admin-reload" id="admin-reload" type="button">↻ Reload data</button>
+            <button class="admin-signout" id="admin-signout" type="button">Sign out</button>
+          </div>
         </div>
 
         <div class="admin-layout">
-          <aside class="calendar-card" aria-label="Order calendar">
-            <div class="calendar-toolbar">
-              <button id="calendar-prev" type="button" aria-label="Previous month">‹</button>
-              <strong id="calendar-title"></strong>
-              <button id="calendar-next" type="button" aria-label="Next month">›</button>
+          <section class="calendar-card" aria-labelledby="calendar-heading">
+            <h3 id="calendar-heading">1. Admin order calendar</h3>
+            <div class="calendar-inner">
+              <div class="calendar-toolbar">
+                <button id="calendar-prev" type="button" aria-label="Previous month">‹</button>
+                <strong id="calendar-title"></strong>
+                <button id="calendar-next" type="button" aria-label="Next month">›</button>
+              </div>
+              <div class="calendar-weekdays" aria-hidden="true">
+                <span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span>
+              </div>
+              <div class="calendar-grid" id="calendar-grid"></div>
+              <div class="selected-day-panel">
+                <div class="selected-day-head">
+                  <div><small>Selected day</small><strong id="selected-day-label"></strong></div>
+                  <strong id="selected-day-total">$0</strong>
+                </div>
+                <div class="orders-list" id="orders-list"></div>
+                <div class="calendar-totals">
+                  <div><small>Selected day</small><strong id="selected-day-summary">$0</strong><span id="selected-day-count">0 payments</span></div>
+                  <div><small id="month-summary-label">This month</small><strong id="month-summary-total">$0</strong><span id="month-summary-count">0 payments</span></div>
+                </div>
+              </div>
             </div>
-            <div class="calendar-weekdays" aria-hidden="true">
-              <span>Su</span><span>Mo</span><span>Tu</span><span>We</span><span>Th</span><span>Fr</span><span>Sa</span>
-            </div>
-            <div class="calendar-grid" id="calendar-grid"></div>
-            <button class="calendar-clear" id="calendar-clear" type="button" hidden>Show all orders</button>
-          </aside>
+          </section>
 
-          <div class="orders-column">
-            <div class="orders-summary">
-              <div><strong id="order-count">0</strong><span>Total orders</span></div>
-              <div><strong id="pending-count">0</strong><span>Pending</span></div>
-              <div><strong id="fulfilled-count">0</strong><span>Fulfilled</span></div>
+          <section class="activity-card" aria-labelledby="activity-heading">
+            <h3 id="activity-heading">2. Payment activity</h3>
+            <p>Completed PayPal captures recorded by the verified webhook.</p>
+            <div class="activity-stats">
+              <div><small>Payments completed</small><strong id="payment-count">0</strong><span>Recorded captures</span></div>
+              <div><small>Paid total</small><strong id="payment-total">$0</strong><span>USD</span></div>
+              <div><small>Awaiting fulfillment</small><strong id="unfulfilled-count">0</strong><span>Paid orders</span></div>
             </div>
-            <p class="orders-filter" id="orders-filter">Showing all orders</p>
-            <div class="orders-list" id="orders-list"></div>
-          </div>
+            <h4>Recent payments</h4>
+            <div class="activity-list" id="activity-list"></div>
+            <p class="admin-status" id="admin-status" role="status" aria-live="polite"></p>
+            <div class="request-section">
+              <h4>Writing requests</h4>
+              <p>Requests are listed separately until a payment is verified.</p>
+              <div class="request-list" id="request-list"></div>
+            </div>
+          </section>
         </div>
       </div>
 
-      <section class="order-report" id="order-report" aria-labelledby="order-report-title" hidden>
-        <div class="order-report-toolbar">
-          <button class="report-back-button" id="order-report-back" type="button">← Back to orders</button>
-          <div class="order-report-actions">
-            <button class="report-print-button" id="order-report-print" type="button">Print / Save PDF</button>
-            <button class="fulfill-button report-fulfill-button" id="order-report-fulfill" type="button">Mark as fulfilled</button>
-          </div>
+      <section class="fulfill-modal" id="fulfill-modal" role="dialog" aria-modal="true" aria-labelledby="fulfill-title" hidden>
+        <div class="fulfill-modal-card">
+          <h2 id="fulfill-title">When was this order fulfilled?</h2>
+          <p>Enter the date and time for the fulfillment record and receipt. Times use your device’s time zone.</p>
+          <form id="fulfill-form">
+            <label for="fulfilled-date">Date</label>
+            <input id="fulfilled-date" type="date" required />
+            <label for="fulfilled-time">Time</label>
+            <input id="fulfilled-time" type="time" required />
+            <p class="fulfill-error" id="fulfill-error" role="alert"></p>
+            <div class="fulfill-actions">
+              <button id="fulfill-cancel" type="button">Cancel</button>
+              <button id="fulfill-confirm" type="submit">Mark fulfilled</button>
+            </div>
+          </form>
         </div>
-        <article class="order-report-sheet" id="order-report-content"></article>
       </section>
     </section>
   </div>
@@ -236,5 +256,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
   <script src="script.js"></script>
+  <script src="receipt.js"></script>
+  <script src="admin.js"></script>
 </body>
 </html>

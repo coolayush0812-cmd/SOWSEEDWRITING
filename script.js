@@ -211,6 +211,39 @@ const BOOKS = [
   }
 ];
 
+const BOOK_PRICES = {
+  "A Kitchen Full of History": 0,
+  "Hands That Built the Morning": 11,
+  "Letters from the Monsoon": 22,
+  "Midnight Radio Diaries": 33,
+  "Notes from a Quiet Classroom": 44,
+  "Portraits of the Night Train": 55,
+  "Seeds Beneath Concrete": 66,
+  "The Language of Clay": 77,
+  "The Memory of Rivers": 88,
+  "Thirty Steps to the Sea": 99,
+  "A Map of Small Kindnesses": 0,
+  "Paper Boats in June": 99,
+  "The Lantern at Low Tide": 110,
+  "The Last Blue Bicycle": 121,
+  "The Orchard After Rain": 132,
+  "The Window Garden": 143,
+  "When the Clockmaker Smiled": 154,
+  "A Prayer Between Seasons": 0,
+  "Grace in the Waiting Room": 165,
+  "The Chapel of Open Doors": 176,
+  "The Mustard Seed Promise": 187
+};
+
+const BOOK_SERIES = [
+  { key: "quiet", category: "Stories", title: "Of Little Things & Passing Days", subtitle: "The Quiet Stories Collection" },
+  { key: "ordinary", category: "Writings & Documentaries", title: "The Stories We Leave Behind", subtitle: "An Anthology of Ordinary Lives" },
+  { key: "faith", category: "Faith-Based Stories", title: "Whispers of Grace", subtitle: "The Faith & Promise Collection" }
+];
+
+// Add each book's checkout or free download URL here when available.
+const BOOK_CHECKOUT_URLS = {};
+
 const BRITISH_FIRST_NAMES = [
   "Amelia", "Oliver", "Isla", "George", "Florence", "Arthur", "Poppy", "Harry", "Imogen", "Jack",
   "Beatrice", "Alfie", "Matilda", "Freddie", "Evie", "Henry", "Harriet", "Theo", "Alice", "Edward",
@@ -367,20 +400,15 @@ const EAST_ASIAN_REVIEWS = EAST_ASIAN_REVIEWER_NAMES.map((reviewer, index) => {
 
 const REVIEWS = [...WESTERN_REVIEWS, ...EAST_ASIAN_REVIEWS];
 
-const ADMIN_EMAIL = "jaymrin01@gmail.com";
+const ADMIN_EMAIL = "sowseed@gmail.com";
 const supabaseConfig = window.SEED_GARDEN_SUPABASE;
-const supabaseClient = window.supabase && supabaseConfig
-  ? window.supabase.createClient(supabaseConfig.url, supabaseConfig.anonKey, {
+const supabaseClient = window.supabase && supabaseConfig?.url && supabaseConfig?.publicKey
+  ? window.supabase.createClient(supabaseConfig.url, supabaseConfig.publicKey, {
       auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
     })
   : null;
 
 const state = {
-  calendarCursor: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
-  selectedDate: null,
-  lastFocusedElement: null,
-  reportReturnFocus: null,
-  activeOrderId: null,
   reviewsShown: 12,
   orders: []
 };
@@ -470,18 +498,17 @@ function configureMobileNavigation() {
 
 function renderLibrary() {
   const catalog = document.querySelector("#library-catalog");
-  const categories = ["Stories", "Writings & Documentaries", "Faith-Based Stories"];
-
-  catalog.innerHTML = categories.map((category) => {
-    const books = BOOKS.filter((book) => book.category === category);
+  catalog.innerHTML = BOOK_SERIES.map((series) => {
+    const books = booksInSeries(series);
     const cards = books.map((book, index) => {
-      const tone = (BOOKS.indexOf(book) + index) % 7;
+      const tone = index % 7;
+      const price = BOOK_PRICES[book.title];
       const frontCover = book.cover
         ? `<span class="book-face book-cover image-cover"><img src="${escapeHtml(book.cover)}" alt="" loading="lazy" decoding="async" /></span>`
         : `<span class="book-face book-cover tone-${tone}">
             <span class="book-mark" aria-hidden="true">${book.icon}</span>
             <h4>${escapeHtml(book.title)}</h4>
-            <small>${escapeHtml(category)}</small>
+            <small>${escapeHtml(book.category)}</small>
           </span>`;
       return `
         <article class="book-item">
@@ -497,6 +524,7 @@ function renderLibrary() {
           </button>
           <div class="book-meta">
             <h4>${escapeHtml(book.title)}</h4>
+            <span class="book-price">${price === 0 ? "Free" : `$${price}`}</span>
             <p>${escapeHtml(book.description)}</p>
             <div class="book-rating">
               <strong>★ ${book.rating.toFixed(1)}</strong>
@@ -507,10 +535,10 @@ function renderLibrary() {
     }).join("");
 
     return `
-      <section class="library-group" aria-labelledby="${category.toLowerCase().replaceAll(/[^a-z0-9]+/g, "-")}">
+      <section class="library-group series-${series.key}" aria-labelledby="series-${series.key}-title">
         <div class="library-group-title">
-          <h3 id="${category.toLowerCase().replaceAll(/[^a-z0-9]+/g, "-")}">${escapeHtml(category)}</h3>
-          <span class="library-count">${books.length} books</span>
+          <h3 id="series-${series.key}-title">${escapeHtml(series.title)}</h3>
+          <p>${escapeHtml(series.subtitle)}</p>
         </div>
         <div class="book-list">${cards}</div>
       </section>`;
@@ -526,13 +554,9 @@ function renderLibrary() {
   });
 }
 
-function setChoice(button, selector, input) {
-  document.querySelectorAll(selector).forEach((choice) => {
-    const selected = choice === button;
-    choice.classList.toggle("active", selected);
-    choice.setAttribute("aria-pressed", String(selected));
-  });
-  document.querySelector(input).value = button.dataset.value;
+function booksInSeries(series) {
+  return BOOKS.filter((book) => book.category === series.category)
+    .sort((a, b) => BOOK_PRICES[a.title] - BOOK_PRICES[b.title] || a.title.localeCompare(b.title));
 }
 
 function clearError(field) {
@@ -545,32 +569,68 @@ function showError(field, message) {
   if (error) error.textContent = message;
 }
 
+function showOrderMode(bookTitle = "") {
+  const isBook = Boolean(bookTitle);
+  const personalChoice = document.querySelector("#personal-request-choice");
+  const form = document.querySelector("#payment-form");
+  const bookPurchase = document.querySelector("#book-purchase");
+  personalChoice.classList.toggle("active", !isBook);
+  personalChoice.setAttribute("aria-pressed", String(!isBook));
+  document.querySelector("#book-select").classList.toggle("book-selected", isBook);
+  form.hidden = isBook;
+  document.querySelector("#checkout-footer").hidden = isBook;
+  bookPurchase.hidden = !isBook;
+  document.querySelector("#checkout-eyebrow").textContent = isBook ? "From the library" : "Personal request form";
+  document.querySelector("#checkout-intro").hidden = isBook;
+
+  if (!isBook) return;
+  document.querySelector("#selected-book-name").textContent = bookTitle;
+  const book = BOOKS.find((item) => item.title === bookTitle);
+  document.querySelector("#selected-book-summary").textContent = book?.story || book?.description || "";
+  const buyButton = document.querySelector("#book-buy-button");
+  const price = BOOK_PRICES[bookTitle];
+  document.querySelector("#book-buy-label").textContent = price === 0
+    ? "Get Free Book"
+    : `Buy Book — $${price}`;
+  buyButton.disabled = !BOOK_CHECKOUT_URLS[bookTitle];
+  buyButton.title = buyButton.disabled ? "Checkout link coming soon" : "";
+}
+
+function priceForPageCount(pageCount) {
+  return 11 * (Math.floor((pageCount - 10) / 11) + 1);
+}
+
+function updatePageSlider() {
+  const slider = document.querySelector("#page-count");
+  const pageCount = Number(slider.value);
+  document.querySelector("#page-count-value").textContent = `${pageCount} pages`;
+  document.querySelector("#page-price").textContent = `$${priceForPageCount(pageCount)}`;
+  slider.style.setProperty("--range-progress", `${((pageCount - 10) / 120) * 100}%`);
+}
+
 function configureOrderForm() {
   const form = document.querySelector("#payment-form");
-  const customWrap = document.querySelector("#custom-pages-wrap");
-  const customInput = document.querySelector("#custom-pages");
+  const pageSlider = document.querySelector("#page-count");
+  const bookSelect = document.querySelector("#book-select");
 
-  document.querySelectorAll(".type-choice").forEach((button) => {
-    button.addEventListener("click", () => setChoice(button, ".type-choice", "#story-type"));
+  BOOK_SERIES.forEach((series) => {
+    const group = document.createElement("optgroup");
+    group.label = series.title;
+    booksInSeries(series).forEach((book) => group.append(new Option(book.title, book.title)));
+    bookSelect.append(group);
+  });
+  bookSelect.addEventListener("change", () => showOrderMode(bookSelect.value));
+  document.querySelector("#book-buy-button").addEventListener("click", () => {
+    const url = BOOK_CHECKOUT_URLS[bookSelect.value];
+    if (url) window.location.assign(url);
+  });
+  document.querySelector("#personal-request-choice").addEventListener("click", () => {
+    bookSelect.value = "";
+    showOrderMode();
   });
 
-  document.querySelectorAll(".page-choice").forEach((button) => {
-    button.addEventListener("click", () => {
-      setChoice(button, ".page-choice", "#page-length");
-      const isCustom = button.dataset.value === "Custom";
-      customWrap.hidden = !isCustom;
-      customInput.required = isCustom;
-      clearError("pages");
-      if (isCustom) customInput.focus();
-    });
-  });
-
-  document.querySelectorAll(".amount-choice").forEach((button) => {
-    button.addEventListener("click", () => {
-      setChoice(button, ".amount-choice", "#amount");
-      document.querySelector("#seed-count").value = button.dataset.seeds;
-    });
-  });
+  pageSlider.addEventListener("input", updatePageSlider);
+  updatePageSlider();
 
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -580,9 +640,9 @@ function configureOrderForm() {
     const email = document.querySelector("#email").value.trim();
     const request = document.querySelector("#request").value.trim();
     const storyType = document.querySelector("#story-type").value;
-    let pageLength = document.querySelector("#page-length").value;
-    const amount = Number(document.querySelector("#amount").value);
-    const seedCount = Number(document.querySelector("#seed-count").value);
+    const pageCount = Number(pageSlider.value);
+    const pageLength = `${pageCount} pages`;
+    const amount = priceForPageCount(pageCount);
     let valid = true;
 
     if (!name) {
@@ -597,14 +657,9 @@ function configureOrderForm() {
       showError("request", "Please share a few details for your request.");
       valid = false;
     }
-    if (pageLength === "Custom") {
-      const pages = Number(customInput.value);
-      if (!Number.isInteger(pages) || pages < 1 || pages > 100) {
-        showError("pages", "Enter a page count from 1 to 100.");
-        valid = false;
-      } else {
-        pageLength = `${pages} custom page${pages === 1 ? "" : "s"}`;
-      }
+    if (!Number.isInteger(pageCount) || pageCount < 10 || pageCount > 130) {
+      showError("pages", "Choose a page count from 10 to 130.");
+      valid = false;
     }
 
     if (!valid) {
@@ -619,11 +674,12 @@ function configureOrderForm() {
       createdAt: now.toISOString(),
       storyType,
       pageLength,
+      pageCount,
       name,
       email,
       request,
       amount,
-      seedCount,
+      seedCount: null,
       status: "pending"
     };
 
@@ -639,7 +695,7 @@ function configureOrderForm() {
       message.className = "form-message success";
       message.textContent = `Request ${order.id} has been received. Thank you, ${name}!`;
       form.reset();
-      resetChoices();
+      updatePageSlider();
 
       if (!document.querySelector("#admin-dashboard").hidden) {
         await renderAdmin();
@@ -653,18 +709,6 @@ function configureOrderForm() {
       submitButton.removeAttribute("aria-busy");
     }
   });
-}
-
-function resetChoices() {
-  const type = document.querySelector('.type-choice[data-value="Personal Request"]');
-  const pages = document.querySelector('.page-choice[data-value="1–3 pages (Short)"]');
-  const amount = document.querySelector('.amount-choice[data-value="14"]');
-  setChoice(type, ".type-choice", "#story-type");
-  setChoice(pages, ".page-choice", "#page-length");
-  setChoice(amount, ".amount-choice", "#amount");
-  document.querySelector("#seed-count").value = "2";
-  document.querySelector("#custom-pages-wrap").hidden = true;
-  document.querySelector("#custom-pages").required = false;
 }
 
 function createOrderId(date) {
@@ -684,6 +728,7 @@ async function createOrder(order) {
     id: order.id,
     story_type: order.storyType,
     page_length: order.pageLength,
+    page_count: order.pageCount,
     customer_name: order.name,
     customer_email: order.email,
     request: order.request,
@@ -700,11 +745,12 @@ function mapOrder(row) {
     createdAt: row.created_at,
     storyType: row.story_type,
     pageLength: row.page_length,
+    pageCount: row.page_count == null ? null : Number(row.page_count),
     name: row.customer_name,
     email: row.customer_email,
     request: row.request,
     amount: Number(row.amount),
-    seedCount: Number(row.seed_count),
+    seedCount: row.seed_count == null ? null : Number(row.seed_count),
     status: row.status,
     fulfilledAt: row.fulfilled_at
   };
@@ -714,420 +760,12 @@ async function loadOrders() {
   const client = requireSupabase();
   const { data, error } = await client
     .from("orders")
-    .select("id, created_at, story_type, page_length, customer_name, customer_email, request, amount, seed_count, status, fulfilled_at")
+    .select("id, created_at, story_type, page_length, page_count, customer_name, customer_email, request, amount, seed_count, status, fulfilled_at")
     .order("created_at", { ascending: false });
 
   if (error) throw error;
   state.orders = (data || []).map(mapOrder);
   return state.orders;
-}
-
-async function fulfillOrder(orderId) {
-  const client = requireSupabase();
-  const { error } = await client
-    .from("orders")
-    .update({ status: "fulfilled", fulfilled_at: new Date().toISOString() })
-    .eq("id", orderId);
-
-  if (error) throw error;
-}
-
-async function handleFulfillment(button) {
-  if (!button || button.disabled) return;
-  const orderId = button.dataset.orderId;
-  button.disabled = true;
-  button.textContent = "Updating…";
-
-  try {
-    await fulfillOrder(orderId);
-    await renderAdmin();
-    if (state.activeOrderId === orderId) renderOrderReport(orderId);
-  } catch (error) {
-    console.error("Unable to fulfill order", error);
-    button.disabled = false;
-    button.textContent = "Try again";
-    document.querySelector("#orders-filter").textContent = "The order could not be updated. Please try again.";
-  }
-}
-
-function configureAdminPortal() {
-  const portal = document.querySelector("#admin-portal");
-  const loginForm = document.querySelector("#admin-login-form");
-
-  document.querySelector("#admin-open").addEventListener("click", openAdmin);
-  document.querySelectorAll("[data-admin-close]").forEach((button) => button.addEventListener("click", closeAdmin));
-
-  loginForm.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    const email = document.querySelector("#admin-email").value.trim().toLowerCase();
-    const password = document.querySelector("#admin-password").value;
-    const error = document.querySelector("#admin-login-error");
-    const loginButton = loginForm.querySelector(".admin-login-button");
-    error.textContent = "";
-    loginButton.disabled = true;
-    loginButton.textContent = "Signing in…";
-
-    try {
-      const client = requireSupabase();
-      const { data, error: authError } = await client.auth.signInWithPassword({ email, password });
-
-      if (authError) throw authError;
-      if (data.user?.email?.toLowerCase() !== ADMIN_EMAIL) {
-        await client.auth.signOut();
-        error.textContent = "This account does not have admin access.";
-        return;
-      }
-
-      loginForm.reset();
-      await showDashboard();
-    } catch (authError) {
-      console.error("Admin sign-in failed", authError);
-      error.textContent = "The email or password is incorrect, or the backend is unavailable.";
-    } finally {
-      loginButton.disabled = false;
-      loginButton.textContent = "Open dashboard";
-    }
-  });
-
-  document.querySelector("#admin-signout").addEventListener("click", async () => {
-    if (supabaseClient) await supabaseClient.auth.signOut();
-    state.orders = [];
-    showLogin();
-  });
-
-  document.querySelector("#calendar-prev").addEventListener("click", () => {
-    state.calendarCursor = new Date(state.calendarCursor.getFullYear(), state.calendarCursor.getMonth() - 1, 1);
-    renderCalendar();
-  });
-
-  document.querySelector("#calendar-next").addEventListener("click", () => {
-    state.calendarCursor = new Date(state.calendarCursor.getFullYear(), state.calendarCursor.getMonth() + 1, 1);
-    renderCalendar();
-  });
-
-  document.querySelector("#calendar-clear").addEventListener("click", () => {
-    state.selectedDate = null;
-    renderAdmin();
-  });
-
-  document.querySelector("#calendar-grid").addEventListener("click", (event) => {
-    const day = event.target.closest(".calendar-day");
-    if (!day) return;
-    state.selectedDate = day.dataset.date;
-    renderAdmin();
-  });
-
-  document.querySelector("#orders-list").addEventListener("click", async (event) => {
-    const detailButton = event.target.closest(".order-detail-button");
-    if (detailButton) {
-      openOrderReport(detailButton.dataset.orderId, detailButton);
-      return;
-    }
-
-    await handleFulfillment(event.target.closest(".fulfill-button"));
-  });
-
-  document.querySelector("#order-report-back").addEventListener("click", closeOrderReport);
-  document.querySelector("#order-report-print").addEventListener("click", () => {
-    document.body.classList.add("printing-order-report");
-    window.print();
-  });
-  window.addEventListener("afterprint", () => document.body.classList.remove("printing-order-report"));
-  document.querySelector("#order-report-fulfill").addEventListener("click", async (event) => {
-    await handleFulfillment(event.currentTarget);
-  });
-
-  document.addEventListener("keydown", (event) => {
-    if (event.key !== "Escape" || portal.hidden) return;
-    if (!document.querySelector("#order-report").hidden) {
-      closeOrderReport();
-      return;
-    }
-    closeAdmin();
-  });
-}
-
-async function openAdmin() {
-  state.lastFocusedElement = document.activeElement;
-  document.querySelector("#admin-portal").hidden = false;
-
-  try {
-    const { data } = supabaseClient
-      ? await supabaseClient.auth.getSession()
-      : { data: { session: null } };
-    const authorized = data.session?.user?.email?.toLowerCase() === ADMIN_EMAIL;
-    if (authorized) {
-      await showDashboard();
-      return;
-    }
-  } catch (error) {
-    console.error("Unable to restore admin session", error);
-  }
-
-  showLogin();
-}
-
-function closeAdmin() {
-  closeOrderReport(false);
-  document.querySelector("#admin-portal").hidden = true;
-  state.lastFocusedElement?.focus();
-}
-
-function showLogin() {
-  closeOrderReport(false);
-  document.querySelector("#admin-login").hidden = false;
-  document.querySelector("#admin-dashboard").hidden = true;
-  requestAnimationFrame(() => document.querySelector("#admin-email").focus());
-}
-
-async function showDashboard() {
-  document.querySelector("#admin-login").hidden = true;
-  document.querySelector("#admin-dashboard").hidden = false;
-  await renderAdmin();
-  requestAnimationFrame(() => document.querySelector("#admin-signout").focus());
-}
-
-function localDateKey(isoDate) {
-  const date = new Date(isoDate);
-  return [date.getFullYear(), String(date.getMonth() + 1).padStart(2, "0"), String(date.getDate()).padStart(2, "0")].join("-");
-}
-
-async function renderAdmin() {
-  if (document.querySelector("#admin-dashboard").hidden) return;
-  const list = document.querySelector("#orders-list");
-  list.innerHTML = '<div class="empty-orders"><span aria-hidden="true">🌱</span><strong>Loading orders…</strong><p>Connecting to the Seed Garden Writings backend.</p></div>';
-
-  let orders;
-  try {
-    orders = await loadOrders();
-  } catch (error) {
-    console.error("Unable to load orders", error);
-    state.orders = [];
-    document.querySelector("#order-count").textContent = "0";
-    document.querySelector("#pending-count").textContent = "0";
-    document.querySelector("#fulfilled-count").textContent = "0";
-    renderCalendar();
-    document.querySelector("#orders-filter").textContent = "Unable to connect to the order database.";
-    list.innerHTML = '<div class="empty-orders"><span aria-hidden="true">⚠️</span><strong>Orders are unavailable</strong><p>Check the Supabase connection and database setup.</p></div>';
-    return;
-  }
-
-  document.querySelector("#order-count").textContent = orders.length;
-  document.querySelector("#pending-count").textContent = orders.filter((order) => order.status !== "fulfilled").length;
-  document.querySelector("#fulfilled-count").textContent = orders.filter((order) => order.status === "fulfilled").length;
-  renderCalendar();
-  renderOrders(orders);
-}
-
-function renderCalendar() {
-  const grid = document.querySelector("#calendar-grid");
-  const year = state.calendarCursor.getFullYear();
-  const month = state.calendarCursor.getMonth();
-  const firstDay = new Date(year, month, 1).getDay();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const orderDates = new Set(state.orders.map((order) => localDateKey(order.createdAt)));
-  const today = localDateKey(new Date().toISOString());
-
-  document.querySelector("#calendar-title").textContent = state.calendarCursor.toLocaleDateString(undefined, { month: "long", year: "numeric" });
-  grid.replaceChildren();
-
-  for (let index = 0; index < firstDay; index += 1) {
-    const spacer = document.createElement("span");
-    spacer.className = "calendar-spacer";
-    grid.append(spacer);
-  }
-
-  for (let dayNumber = 1; dayNumber <= daysInMonth; dayNumber += 1) {
-    const dateKey = `${year}-${String(month + 1).padStart(2, "0")}-${String(dayNumber).padStart(2, "0")}`;
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "calendar-day";
-    button.dataset.date = dateKey;
-    button.textContent = dayNumber;
-    button.setAttribute("aria-label", new Date(year, month, dayNumber).toLocaleDateString(undefined, { dateStyle: "long" }));
-    button.classList.toggle("has-orders", orderDates.has(dateKey));
-    button.classList.toggle("is-today", dateKey === today);
-    button.classList.toggle("is-selected", dateKey === state.selectedDate);
-    grid.append(button);
-  }
-
-  document.querySelector("#calendar-clear").hidden = !state.selectedDate;
-}
-
-function renderOrders(allOrders) {
-  const list = document.querySelector("#orders-list");
-  const filtered = state.selectedDate
-    ? allOrders.filter((order) => localDateKey(order.createdAt) === state.selectedDate)
-    : allOrders;
-  const orders = [...filtered].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-  const filterLabel = document.querySelector("#orders-filter");
-
-  filterLabel.textContent = state.selectedDate
-    ? `Orders placed on ${new Date(`${state.selectedDate}T12:00:00`).toLocaleDateString(undefined, { dateStyle: "long" })}`
-    : "Showing all orders";
-
-  if (!orders.length) {
-    list.innerHTML = `<div class="empty-orders"><span aria-hidden="true">🗂️</span><strong>No orders here yet</strong><p>${state.selectedDate ? "Choose another date or show all orders." : "New customer requests will appear here."}</p></div>`;
-    return;
-  }
-
-  list.replaceChildren(...orders.map(createOrderCard));
-}
-
-function createOrderCard(order) {
-  const card = document.createElement("article");
-  const fulfilled = order.status === "fulfilled";
-  card.className = `order-card${fulfilled ? " is-fulfilled" : ""}`;
-
-  const header = document.createElement("div");
-  header.className = "order-card-head";
-  const identity = document.createElement("div");
-  const id = document.createElement("strong");
-  id.textContent = order.id;
-  const time = document.createElement("time");
-  time.dateTime = order.createdAt;
-  time.textContent = new Date(order.createdAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
-  identity.append(id, time);
-  const status = document.createElement("span");
-  status.className = `status-pill${fulfilled ? " fulfilled" : ""}`;
-  status.textContent = fulfilled ? "Fulfilled" : "Pending";
-  header.append(identity, status);
-
-  const details = document.createElement("div");
-  details.className = "order-details";
-  [
-    ["Name", order.name],
-    ["Email", order.email],
-    ["Type", order.storyType],
-    ["Pages", order.pageLength],
-    ["Seeds", `${order.seedCount || Math.max(1, Number(order.amount) / 7)} seed${(order.seedCount || Number(order.amount) / 7) === 1 ? "" : "s"}`],
-    ["Amount", `$${order.amount}`],
-    ["Request", order.request, true]
-  ].forEach(([label, value, full]) => {
-    const detail = document.createElement("div");
-    detail.className = `order-detail${full ? " full" : ""}`;
-    const small = document.createElement("small");
-    small.textContent = label;
-    const content = document.createElement("span");
-    content.textContent = value;
-    detail.append(small, content);
-    details.append(detail);
-  });
-
-  const actions = document.createElement("div");
-  actions.className = "order-card-actions";
-
-  const detailButton = document.createElement("button");
-  detailButton.type = "button";
-  detailButton.className = "order-detail-button";
-  detailButton.dataset.orderId = order.id;
-  detailButton.textContent = "Order details";
-
-  const fulfillButton = document.createElement("button");
-  fulfillButton.type = "button";
-  fulfillButton.className = "fulfill-button";
-  fulfillButton.dataset.orderId = order.id;
-  fulfillButton.disabled = fulfilled;
-  fulfillButton.textContent = fulfilled ? "✓ Order fulfilled" : "Mark as fulfilled";
-
-  actions.append(detailButton, fulfillButton);
-  card.append(header, details, actions);
-  return card;
-}
-
-function reportDate(isoDate) {
-  if (!isoDate) return "Not yet fulfilled";
-  return new Date(isoDate).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
-}
-
-function renderOrderReport(orderId) {
-  const order = state.orders.find((item) => item.id === orderId);
-  if (!order) {
-    closeOrderReport(false);
-    return;
-  }
-
-  const fulfilled = order.status === "fulfilled";
-  const seedCount = order.seedCount || Math.max(1, Number(order.amount) / 7);
-  const statusLabel = fulfilled ? "Fulfilled" : "Pending";
-  const fulfillmentCopy = fulfilled
-    ? "This personalized writing order has been marked as fulfilled."
-    : "This personalized writing order is awaiting fulfillment.";
-  const content = document.querySelector("#order-report-content");
-  content.innerHTML = `
-    <header class="report-header">
-      <a class="report-brand" href="index.html" aria-label="Seed Garden Writings home">
-        <span class="report-brand-mark" aria-hidden="true">🌱</span>
-        <span><strong>Seed Garden Writings</strong><small>Personalized writings</small></span>
-      </a>
-      <div class="report-heading"><span>Custom Digital Order</span><h2 id="order-report-title">ORDER REPORT</h2></div>
-    </header>
-    <section class="report-hero">
-      <div><span class="report-eyebrow">Order confirmation</span><h3>Your Writing Order</h3><p>A clear record of the personalized writing request and its fulfillment.</p></div>
-      <span class="report-status${fulfilled ? " fulfilled" : ""}">${statusLabel}</span>
-    </section>
-    <section class="report-section">
-      <h4>Order summary</h4>
-      <div class="report-card report-summary">
-        <div><small>Order date</small><span>${escapeHtml(reportDate(order.createdAt))}</span></div>
-        <div><small>Order ID</small><strong>${escapeHtml(order.id)}</strong></div>
-        <div><small>Amount</small><strong>$${escapeHtml(order.amount)} USD</strong></div>
-        <div><small>Status</small><span class="report-status${fulfilled ? " fulfilled" : ""}">${statusLabel}</span></div>
-      </div>
-    </section>
-    <section class="report-section">
-      <h4>Customer</h4>
-      <div class="report-card report-columns">
-        <div><small>Name</small><strong>${escapeHtml(order.name)}</strong></div>
-        <div><small>Email</small><span>${escapeHtml(order.email)}</span></div>
-      </div>
-    </section>
-    <section class="report-section">
-      <h4>Ordered writing</h4>
-      <div class="report-card report-writing">
-        <div><small>Story type</small><strong>${escapeHtml(order.storyType)}</strong></div>
-        <div><small>Pages</small><span>${escapeHtml(order.pageLength)}</span></div>
-        <div><small>Seeds</small><span>${escapeHtml(seedCount)} seed${seedCount === 1 ? "" : "s"}</span></div>
-      </div>
-    </section>
-    <section class="report-section">
-      <h4>Personalized writing request</h4>
-      <blockquote class="report-card report-request">${escapeHtml(order.request)}</blockquote>
-    </section>
-    <section class="report-section">
-      <h4>Fulfillment</h4>
-      <div class="report-card report-fulfillment">
-        <div><small>Fulfillment status</small><strong>${statusLabel}</strong><p>${fulfillmentCopy}</p></div>
-        <div><small>Fulfilled on</small><strong>${escapeHtml(reportDate(order.fulfilledAt))}</strong></div>
-      </div>
-    </section>
-    <footer class="report-footer"><span>© ${new Date().getFullYear()} Seed Garden Writings</span><span>Custom Order Record</span><span>Stories · Faith · Inspiration</span></footer>
-  `;
-
-  const fulfillButton = document.querySelector("#order-report-fulfill");
-  fulfillButton.dataset.orderId = order.id;
-  fulfillButton.disabled = fulfilled;
-  fulfillButton.textContent = fulfilled ? "✓ Order fulfilled" : "Mark as fulfilled";
-}
-
-function openOrderReport(orderId, trigger) {
-  state.activeOrderId = orderId;
-  state.reportReturnFocus = trigger || document.activeElement;
-  renderOrderReport(orderId);
-  const report = document.querySelector("#order-report");
-  report.hidden = false;
-  report.scrollTop = 0;
-  document.querySelector("#order-report-back").focus();
-}
-
-function closeOrderReport(restoreFocus = true) {
-  const report = document.querySelector("#order-report");
-  if (!report || report.hidden) return;
-  report.hidden = true;
-  document.body.classList.remove("printing-order-report");
-  state.activeOrderId = null;
-  if (restoreFocus) state.reportReturnFocus?.focus();
-  state.reportReturnFocus = null;
 }
 
 document.addEventListener("DOMContentLoaded", () => {
