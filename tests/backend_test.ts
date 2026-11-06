@@ -102,6 +102,25 @@ Deno.test("free book orders are persisted as FREE without calling PayPal", async
   });
 });
 
+Deno.test("a PayPal merchant restriction leaves a failed order and never records a payment", async () => {
+  const states: string[] = [];
+  await withFetch((url, init) => {
+    if (url.endsWith("/rest/v1/orders")) return new Response(null, { status: 201 });
+    if (url.includes("/rest/v1/orders?")) {
+      states.push(JSON.parse(String(init.body)).payment_status);
+      return json([{}]);
+    }
+    if (url.endsWith("/v1/oauth2/token")) return json({ access_token: "test-token" });
+    if (url.endsWith("/v2/checkout/orders")) return json({ name: "UNPROCESSABLE_ENTITY", debug_id: "test-debug-id", details: [{ issue: "PAYEE_ACCOUNT_RESTRICTED" }] }, 422);
+    throw new Error(`A rejected checkout must not write a payment: ${url}`);
+  }, async () => {
+    const response = await call("paypal-checkout", { action: "create", type: "book", name: "Test Reader", email: "reader@example.com", bookTitle: "Hands That Built the Morning" });
+    equal(response.status, 502);
+    equal(states, ["FAILED"]);
+    assert(!(await response.json()).error.includes("PAYEE_ACCOUNT_RESTRICTED"));
+  });
+});
+
 Deno.test("capture verifies the amount and atomically records the completed payment", async () => {
   const records: Record<string, any>[] = [];
   let mismatch = false;

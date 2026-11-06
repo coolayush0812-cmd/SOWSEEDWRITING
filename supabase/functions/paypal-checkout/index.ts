@@ -230,7 +230,12 @@ async function createCheckout(body: Payload): Promise<Response> {
     const result = await created.json().catch(() => ({}));
     if (!created.ok || typeof result.id !== "string") {
       await setPaymentState(order.id, { payment_status: "FAILED" });
-      console.error("PayPal order creation failed", created.status, result.name);
+      console.error("PayPal order creation failed", JSON.stringify({
+        status: created.status,
+        name: result.name,
+        debugId: result.debug_id,
+        issues: Array.isArray(result.details) ? result.details.map((detail: Record<string, unknown>) => detail.issue) : [],
+      }));
       return json(502, { error: "PayPal could not start checkout. Please try again." });
     }
     if (!await setPaymentState(order.id, { paypal_order_id: result.id })) {

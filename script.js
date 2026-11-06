@@ -585,6 +585,7 @@ function showOrderMode(bookTitle = "") {
   document.querySelector("#selected-book-summary").textContent = book?.story || book?.description || "";
   const buyButton = document.querySelector("#book-buy-button");
   const price = BOOK_PRICES[bookTitle];
+  document.querySelector("#selected-book-price").textContent = price === 0 ? "Free" : `$${price} USD`;
   const paypalContainer = document.querySelector("#book-paypal-container");
   buyButton.hidden = price !== 0;
   paypalContainer.hidden = price === 0;

@@ -23,6 +23,7 @@ A fixed-screen three-column writing website. Each column scrolls independently w
 - `supabase/functions/admin-portal/` — shared-password sign-in, admin data access, fulfillment, and password changes
 - `supabase/functions/paypal-checkout/` — server-priced PayPal Orders v2 creation and capture for books and custom writing
 - `supabase/functions/paypal-webhook/` — PayPal Live webhook signature verification and payment recording
+- `PAYPAL_SETUP.md` — replacing PayPal credentials and the order/fulfillment workflow
 
 ## Run locally
 
@@ -60,7 +61,7 @@ Supabase supplies `SUPABASE_URL` and its server key to the function. The passwor
 
 ## PayPal webhook deployment
 
-The new webhook URL will be `https://jzcsjkntbueyeuykymwh.supabase.co/functions/v1/paypal-webhook` after the function is deployed. Create a new PayPal webhook for this URL and subscribe it to `PAYMENT.CAPTURE.COMPLETED`. Set these Supabase Edge Function secrets in the new project: `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET`, and the **new** `PAYPAL_WEBHOOK_ID`. Supabase supplies `SUPABASE_URL` and its server secret key to the function. Use PayPal **Live** credentials for this Live endpoint. Never put the PayPal secret or Supabase server key in browser files or Git.
+The webhook URL is `https://jzcsjkntbueyeuykymwh.supabase.co/functions/v1/paypal-webhook`. Create a PayPal webhook for this URL and subscribe it to `PAYMENT.CAPTURE.COMPLETED`. Set these Supabase Edge Function secrets: `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET`, and `PAYPAL_WEBHOOK_ID`. Supabase supplies `SUPABASE_URL` and its server secret key to the function. Use PayPal **Live** credentials for this Live endpoint. Never put the PayPal secret or Supabase server key in browser files or Git. See [PAYPAL_SETUP.md](PAYPAL_SETUP.md) to change the app later; the normal checkout stays enabled and requires no website activation switch.
 
 From an authenticated Supabase CLI session for this project:
 

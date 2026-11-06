@@ -471,6 +471,8 @@ a { color: inherit; }
 .book-purchase p { margin: 0 0 20px; color: var(--muted); font-size: 13px; line-height: 1.55; }
 .book-customer-fields { margin-top: 20px; }
 .book-customer-fields .field-group { margin-bottom: 12px; }
+.book-order-total { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 13px 0; border-top: 1px solid var(--line); font-size: 13px; }
+.book-order-total strong { color: var(--accent-dark); font-size: 19px; }
 
 .page-slider-section { margin-bottom: 14px; padding: 12px 14px 10px; border-radius: 14px; background: var(--panel-soft); }
 .page-slider-heading,
