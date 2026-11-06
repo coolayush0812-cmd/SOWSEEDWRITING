@@ -518,6 +518,7 @@ function goToToday() {
 
 async function openAdmin() {
   adminState.lastFocusedElement = document.activeElement;
+  document.body.classList.add("admin-is-open");
   document.querySelector(".page-shell").inert = true;
   document.querySelector("#admin-portal").hidden = false;
   if (adminSessionToken()) {
@@ -535,10 +536,12 @@ function closeAdmin() {
   document.querySelector("#admin-dashboard").inert = false;
   document.querySelector("#admin-portal").hidden = true;
   document.querySelector(".page-shell").inert = false;
+  document.body.classList.remove("admin-is-open");
   adminState.lastFocusedElement?.focus();
 }
 
 function showAdminLogin() {
+  document.querySelector(".admin-dialog").classList.add("is-login");
   stopAdminRefresh();
   adminState.requestSequence += 1;
   adminState.payments = [];
@@ -550,6 +553,7 @@ function showAdminLogin() {
 }
 
 async function showAdminDashboard() {
+  document.querySelector(".admin-dialog").classList.remove("is-login");
   document.querySelector("#admin-login").hidden = true;
   document.querySelector("#admin-dashboard").hidden = false;
   startAdminRefresh();

@@ -406,7 +406,10 @@ const state = {
   personalButtonsRendered: false,
   bookButtonsRendered: false,
   checkoutDrafts: {},
-  checkoutOrderIds: {}
+  checkoutOrderIds: {},
+  checkoutVersions: { personal: 0, book: 0 },
+  checkoutPreparing: {},
+  paypalRenderPromises: {}
 };
 
 function escapeHtml(value) {
@@ -566,6 +569,8 @@ function showError(field, message) {
 }
 
 function showOrderMode(bookTitle = "") {
+  resetPaymentOptions("personal");
+  resetPaymentOptions("book");
   const isBook = Boolean(bookTitle);
   const personalChoice = document.querySelector("#personal-request-choice");
   const form = document.querySelector("#payment-form");
@@ -586,11 +591,8 @@ function showOrderMode(bookTitle = "") {
   const buyButton = document.querySelector("#book-buy-button");
   const price = BOOK_PRICES[bookTitle];
   document.querySelector("#selected-book-price").textContent = price === 0 ? "Free" : `$${price} USD`;
-  const paypalContainer = document.querySelector("#book-paypal-container");
-  buyButton.hidden = price !== 0;
-  paypalContainer.hidden = price === 0;
-  document.querySelector("#book-buy-label").textContent = "Get free ebook";
-  if (price > 0) renderBookPayPalButtons();
+  buyButton.hidden = false;
+  document.querySelector("#book-buy-label").textContent = price === 0 ? "Get free ebook" : "Order";
 }
 
 function priceForPageCount(pageCount) {
@@ -616,7 +618,10 @@ function configureOrderForm() {
     bookSelect.append(group);
   });
   bookSelect.addEventListener("change", () => showOrderMode(bookSelect.value));
-  document.querySelector("#book-buy-button").addEventListener("click", submitFreeBookOrder);
+  document.querySelector("#book-buy-button").addEventListener("click", () => {
+    if (BOOK_PRICES[bookSelect.value] === 0) return submitFreeBookOrder();
+    return beginCheckout("book");
+  });
   document.querySelector("#personal-request-choice").addEventListener("click", () => {
     bookSelect.value = "";
     showOrderMode();
@@ -624,8 +629,74 @@ function configureOrderForm() {
 
   pageSlider.addEventListener("input", updatePageSlider);
   updatePageSlider();
-  document.querySelector("#payment-form").addEventListener("submit", (event) => event.preventDefault());
-  renderPersonalPayPalButtons();
+  document.querySelector("#payment-form").addEventListener("submit", (event) => {
+    event.preventDefault();
+    return beginCheckout("personal");
+  });
+  document.querySelector("#payment-form").addEventListener("input", () => resetPaymentOptions("personal"));
+  document.querySelector("#book-purchase").addEventListener("input", () => resetPaymentOptions("book"));
+  resetPaymentOptions("personal");
+  resetPaymentOptions("book");
+}
+
+function resetPaymentOptions(kind) {
+  state.checkoutVersions[kind] += 1;
+  state.checkoutDrafts[kind] = null;
+  const options = document.querySelector(`#${kind}-payment-options`);
+  options.hidden = true;
+  options.classList.remove("is-loading");
+  const button = document.querySelector(kind === "personal" ? "#personal-order-button" : "#book-buy-button");
+  button.hidden = false;
+  button.disabled = false;
+  button.setAttribute("aria-expanded", "false");
+  button.removeAttribute("aria-busy");
+  document.querySelector(kind === "personal" ? "#personal-order-label" : "#book-buy-label").textContent = kind === "book" && BOOK_PRICES[document.querySelector("#book-select").value] === 0 ? "Get free ebook" : "Order";
+  const message = document.querySelector(kind === "personal" ? "#form-message" : "#book-order-message");
+  message.className = "form-message";
+  message.textContent = "";
+}
+
+async function beginCheckout(kind) {
+  const version = state.checkoutVersions[kind];
+  if (state.checkoutPreparing[kind] === version) return false;
+  const draft = kind === "personal" ? personalCheckoutDraft() : bookCheckoutDraft();
+  if (!draft || (kind === "book" && BOOK_PRICES[draft.bookTitle] === 0)) return false;
+  const button = document.querySelector(kind === "personal" ? "#personal-order-button" : "#book-buy-button");
+  const label = document.querySelector(kind === "personal" ? "#personal-order-label" : "#book-buy-label");
+  const options = document.querySelector(`#${kind}-payment-options`);
+  const message = document.querySelector(kind === "personal" ? "#form-message" : "#book-order-message");
+  state.checkoutDrafts[kind] = draft;
+  state.checkoutPreparing[kind] = version;
+  button.disabled = true;
+  button.setAttribute("aria-busy", "true");
+  label.textContent = "Loading payment options…";
+  message.textContent = "";
+  try {
+    const paypal = await loadPayPalSdk();
+    if (state.checkoutVersions[kind] !== version) return false;
+    options.classList.add("is-loading");
+    options.hidden = false;
+    await renderPayPalButtons(kind, `#${kind}-paypal-container`, paypal);
+    if (state.checkoutVersions[kind] !== version) return false;
+    options.classList.remove("is-loading");
+    button.hidden = true;
+    button.setAttribute("aria-expanded", "true");
+    return true;
+  } catch (error) {
+    if (state.checkoutVersions[kind] !== version) return false;
+    options.hidden = true;
+    options.classList.remove("is-loading");
+    console.error("PayPal checkout is unavailable", error);
+    showCheckoutMessage(kind, error.message || "Payment options could not load. Please try again.", true);
+    return false;
+  } finally {
+    if (state.checkoutPreparing[kind] === version) delete state.checkoutPreparing[kind];
+    if (state.checkoutVersions[kind] === version) {
+      button.disabled = false;
+      button.removeAttribute("aria-busy");
+      label.textContent = "Order";
+    }
+  }
 }
 
 async function checkoutRequest(action, fields = {}) {
@@ -702,7 +773,6 @@ function bookCheckoutDraft() {
   const name = nameField.value.trim();
   const email = emailField.value.trim();
   const message = document.querySelector("#book-order-message");
-  const button = document.querySelector("#book-buy-button");
   const nameError = document.querySelector("#book-name-error");
   const emailError = document.querySelector("#book-email-error");
   nameError.textContent = "";
@@ -732,10 +802,10 @@ function showCheckoutMessage(kind, message, isError = false) {
   element.textContent = message;
 }
 
-async function renderPayPalButtons(kind, container) {
+async function renderPayPalButtons(kind, container, paypal) {
   if (kind === "personal" ? state.personalButtonsRendered : state.bookButtonsRendered) return;
-  try {
-    const paypal = await loadPayPalSdk();
+  if (state.paypalRenderPromises[kind]) return state.paypalRenderPromises[kind];
+  const rendering = (async () => {
     const buttonSet = paypal.Buttons({
       style: { layout: "vertical", color: "gold", shape: "rect", label: "paypal" },
       onClick: (data, actions) => {
@@ -763,13 +833,15 @@ async function renderPayPalButtons(kind, container) {
           const result = await checkoutRequest("capture", { paypalOrderId: data.orderID });
           const draft = state.checkoutDrafts[kind];
           if (kind === "personal") {
-            showCheckoutMessage(kind, `Payment received. Order ${result.orderId} is confirmed; your writing will be emailed within up to 7 days.`);
             document.querySelector("#payment-form").reset();
             updatePageSlider();
+            resetPaymentOptions(kind);
+            showCheckoutMessage(kind, `Payment received. Order ${result.orderId} is confirmed; your writing will be emailed within up to 7 days.`);
           } else {
-            showCheckoutMessage(kind, `Payment received. Order ${result.orderId} is confirmed for ${draft?.email}.`);
             document.querySelector("#book-customer-name").value = "";
             document.querySelector("#book-customer-email").value = "";
+            resetPaymentOptions(kind);
+            showCheckoutMessage(kind, `Payment received. Order ${result.orderId} is confirmed for ${draft?.email || "your email address"}.`);
           }
           if (!document.querySelector("#admin-dashboard").hidden) await renderAdmin();
         } catch (error) {
@@ -788,18 +860,11 @@ async function renderPayPalButtons(kind, container) {
     await buttonSet.render(container);
     if (kind === "personal") state.personalButtonsRendered = true;
     else state.bookButtonsRendered = true;
-  } catch (error) {
-    console.error("PayPal checkout is unavailable", error);
-    showCheckoutMessage(kind, error.message || "PayPal checkout is temporarily unavailable.", true);
-  }
-}
-
-function renderPersonalPayPalButtons() {
-  return renderPayPalButtons("personal", "#personal-paypal-container");
-}
-
-function renderBookPayPalButtons() {
-  return renderPayPalButtons("book", "#book-paypal-container");
+  })();
+  state.paypalRenderPromises[kind] = rendering;
+  try { await rendering; }
+  catch (error) { document.querySelector(container).replaceChildren(); throw error; }
+  finally { state.paypalRenderPromises[kind] = null; }
 }
 
 async function submitFreeBookOrder() {

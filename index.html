@@ -120,7 +120,11 @@
             <small class="error" data-error-for="request"></small>
           </div>
 
-          <div id="personal-paypal-container" class="paypal-button-container"></div>
+          <button class="pay-button" id="personal-order-button" type="submit" aria-controls="personal-payment-options" aria-expanded="false"><span id="personal-order-label">Order</span><span aria-hidden="true">→</span></button>
+          <div class="payment-options" id="personal-payment-options" role="region" aria-label="Payment options" hidden>
+            <p class="payment-options-title">Choose how to pay</p>
+            <div id="personal-paypal-container" class="paypal-button-container"></div>
+          </div>
           <p class="secure-note">Personal requests are written for you and delivered by email within up to 7 days.</p>
           <div id="form-message" class="form-message" role="status" aria-live="polite"></div>
         </form>
@@ -145,8 +149,11 @@
             </div>
           </div>
           <div class="book-order-total"><span>Total</span><strong id="selected-book-price"></strong></div>
-          <button class="pay-button book-buy-button" id="book-buy-button" type="button" hidden><span id="book-buy-label">Get free book</span><span aria-hidden="true">→</span></button>
-          <div id="book-paypal-container" class="paypal-button-container" hidden></div>
+          <button class="pay-button book-buy-button" id="book-buy-button" type="button" aria-controls="book-payment-options" aria-expanded="false"><span id="book-buy-label">Order</span><span aria-hidden="true">→</span></button>
+          <div class="payment-options" id="book-payment-options" role="region" aria-label="Payment options" hidden>
+            <p class="payment-options-title">Choose how to pay</p>
+            <div id="book-paypal-container" class="paypal-button-container"></div>
+          </div>
           <p class="secure-note">After your order is confirmed, we’ll send your ebook to the email address you provide.</p>
           <div id="book-order-message" class="form-message" role="status" aria-live="polite"></div>
         </div>
@@ -174,7 +181,7 @@
 
   <div class="admin-portal" id="admin-portal" hidden>
     <button class="admin-backdrop" type="button" data-admin-close aria-label="Close admin portal"></button>
-    <section class="admin-dialog" role="dialog" aria-modal="true" aria-labelledby="admin-title">
+    <section class="admin-dialog is-login" role="dialog" aria-modal="true" aria-labelledby="admin-title">
       <button class="admin-close" type="button" data-admin-close aria-label="Close admin portal">×</button>
 
       <div class="admin-login" id="admin-login">
