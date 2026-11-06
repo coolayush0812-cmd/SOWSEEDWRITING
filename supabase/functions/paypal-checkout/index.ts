@@ -252,14 +252,12 @@ async function loadOrderForCapture(paypalOrderId: string): Promise<Record<string
 }
 
 async function saveCaptureRecord(order: Record<string, any>, paypalOrderId: string, capture: Record<string, any>, payer: Record<string, any>): Promise<boolean> {
-  const unit = capture.purchase_units?.[0];
   const buyerName = [payer?.name?.given_name, payer?.name?.surname].filter(Boolean).join(" ") || order.customer_name;
   const buyerEmail = payer?.email_address || order.customer_email;
   const itemName = order.book_title || "Personalised Digital Writing - Custom Order Made Writing";
-  const result = await database("payment_records?on_conflict=transaction_id", {
+  const result = await database("rpc/record_paypal_capture", {
     method: "POST",
-    headers: { prefer: "resolution=ignore-duplicates,return=minimal" },
-    body: JSON.stringify({
+    body: JSON.stringify({ p_record: {
       provider: "PayPal",
       provider_order_id: paypalOrderId,
       transaction_id: capture.id,
@@ -273,10 +271,9 @@ async function saveCaptureRecord(order: Record<string, any>, paypalOrderId: stri
       currency: "USD",
       paid_at: capture.update_time || new Date().toISOString(),
       payment_status: "COMPLETED",
-      status: "unfulfilled",
-    }),
+    } }),
   });
-  if (!result.ok) console.error("Could not save PayPal payment record", result.status, unit?.reference_id);
+  if (!result.ok) console.error("Could not save PayPal payment record", result.status, order.id);
   return result.ok;
 }
 
@@ -286,8 +283,7 @@ async function captureCheckout(body: Payload): Promise<Response> {
   try {
     const order = await loadOrderForCapture(paypalOrderId);
     if (!order) return json(404, { error: "Could not find the order for this PayPal checkout." });
-    if (order.payment_status === "COMPLETED") return json(200, { status: "COMPLETED", orderId: order.id });
-    if (order.payment_status !== "PENDING") return json(409, { error: "This order is no longer awaiting payment." });
+    if (order.payment_status === "FREE") return json(409, { error: "This is a free order and does not require a payment." });
 
     const token = await paypalAccessToken();
     const orderResponse = await paypalRequest(`/v2/checkout/orders/${encodeURIComponent(paypalOrderId)}`, token);
@@ -304,6 +300,7 @@ async function captureCheckout(body: Payload): Promise<Response> {
     if (paypalOrder.status === "COMPLETED") {
       result = paypalOrder;
     } else if (paypalOrder.status === "APPROVED") {
+      if (order.payment_status === "CANCELLED") return json(409, { error: "This checkout was cancelled. Start a new checkout to pay." });
       const captureResponse = await paypalRequest(`/v2/checkout/orders/${encodeURIComponent(paypalOrderId)}/capture`, token, {
         method: "POST",
         headers: { "PayPal-Request-Id": `capture-${paypalOrderId}` },
@@ -322,19 +319,21 @@ async function captureCheckout(body: Payload): Promise<Response> {
     }
     if (result.status !== "COMPLETED") return json(402, { error: "PayPal has not confirmed this payment. No order was marked paid." });
 
-    const unit = result.purchase_units?.[0] || approvedUnit;
+    if (!result.purchase_units?.[0]?.payments?.captures) {
+      const refreshed = await paypalRequest(`/v2/checkout/orders/${encodeURIComponent(paypalOrderId)}`, token);
+      if (!refreshed.ok) throw new Error("Could not read the completed PayPal capture");
+      result = await refreshed.json();
+    }
+    const unit = result.purchase_units?.[0];
     const capture = unit?.payments?.captures?.find((item: Record<string, any>) => item.status === "COMPLETED");
     if (
       !capture || capture.amount?.currency_code !== "USD" || capture.amount?.value !== expectedAmount ||
       !capture.id
     ) return json(409, { error: "The PayPal payment does not match this order. Please contact us." });
 
-    const paidAt = capture.update_time || new Date().toISOString();
-    if (!await setPaymentState(order.id, { payment_status: "COMPLETED", paid_at: paidAt }, "&payment_status=eq.PENDING")) {
-      const current = await loadOrderForCapture(paypalOrderId);
-      if (current?.payment_status !== "COMPLETED") return json(502, { error: "Payment was captured, but we could not update the order. Please contact us with your PayPal receipt." });
+    if (!await saveCaptureRecord(order, paypalOrderId, capture, result.payer || {})) {
+      return json(502, { error: "Payment was captured, but we could not save the payment record. Please contact us with your PayPal receipt." });
     }
-    await saveCaptureRecord(order, paypalOrderId, { ...capture, purchase_units: result.purchase_units }, result.payer || {});
     return json(200, { status: "COMPLETED", orderId: order.id });
   } catch (error) {
     console.error("PayPal capture failed", error);

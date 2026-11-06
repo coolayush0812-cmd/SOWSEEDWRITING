@@ -40,13 +40,15 @@ Then visit `http://localhost:8000`.
 
 Sow Seed Writing offers freelance fiction and nonfiction, personalized stories and scripts, and original copyright-free digital books. Personal requests are saved in Supabase and delivered by email within up to seven days. Admin access uses one shared portal password, without Supabase Auth profiles. The password can be changed in the portal; changing it invalidates existing sessions.
 
-Book prices are listed in `BOOK_PRICES` in `script.js` and independently verified by `paypal-checkout`. Personal writing prices are calculated by the server from the selected page count. Paid orders appear in Supabase only after PayPal confirms capture; free books are recorded without a charge.
+Book prices are listed in `BOOK_PRICES` in `script.js` and independently verified by `paypal-checkout`. Personal writing prices are calculated by the server from the selected page count. Checkout creates a pending order; PayPal capture and its webhook use the same atomic database operation to confirm the order and record one payment. Free books are recorded without a charge.
+
+The portal shows pending, paid, free, cancelled, and older unverified orders. It also shows PayPal records without a matching website order, without counting linked orders twice. Only verified PayPal payments contribute to revenue. Existing manual orders remain visible as payment unverified. Marking an order fulfilled updates its linked payment in the same transaction; the PDF includes the PayPal transaction details when available.
 
 ## Supabase setup
 
 The browser connection is configured in `supabase-config.js` and points to `https://jzcsjkntbueyeuykymwh.supabase.co`. Its publishable key is configured in `publicKey`. Never place a secret or service-role key in frontend code.
 
-Apply all migrations in `supabase/migrations/`, including `202611060008_add_paypal_checkout.sql`, before using checkout. The migrations update slider pricing, create verified payment records, add manual book orders, and add PayPal order/payment state. Existing orders and payment records from the previous project will not transfer automatically.
+Apply all migrations in `supabase/migrations/`, through `202611060010_record_paypal_capture.sql`, before using checkout. The migrations update slider pricing, create verified payment records, add manual book orders, and add atomic PayPal recording and fulfillment. Existing orders and payment records from the previous project will not transfer automatically.
 
 The admin portal uses the `admin-portal` Edge Function. Configure `ADMIN_PASSWORD` and `ADMIN_SESSION_SECRET` before deploying it. PayPal checkout uses the PayPal Live app; configure these Edge Function secrets before deploying the checkout and webhook functions:
 
@@ -63,8 +65,8 @@ The new webhook URL will be `https://jzcsjkntbueyeuykymwh.supabase.co/functions/
 From an authenticated Supabase CLI session for this project:
 
 ```bash
-supabase link --project-ref jzcsjkntbueyeuykymwh
-supabase db push
+supabase link jzcsjkntbueyeuykymwh
+supabase db push --remote
 supabase functions deploy admin-portal --no-verify-jwt
 supabase functions deploy paypal-checkout --no-verify-jwt
 supabase functions deploy paypal-webhook --no-verify-jwt
@@ -75,3 +77,9 @@ Set the function secrets through the Supabase dashboard or `supabase secrets set
 Once deployed, PayPal buttons create and capture orders through the server-side Orders v2 API. The server sets the displayed line-item name, verifies the amount against the selected book/page count, and records the completed payment. The signed webhook independently reconciles the capture. The admin function returns paid/free order records and saves fulfillment dates. A receipt PDF becomes available after an order is marked fulfilled.
 
 Paid ebook checkout currently records and confirms the purchase. Instant ebook download and automatic email attachment require adding the ebook files and an email-delivery provider; they are not part of the PayPal capture flow.
+
+## Checks
+
+Run `deno test --allow-read --allow-env tests/backend_test.ts` for the function and portal regression tests. They mock PayPal and database requests and never charge a payment.
+
+`tests/portal_database.sql` checks capture deduplication, amount matching, and fulfillment consistency in a rolled-back transaction. Run it against the migrated database with `supabase db query --remote --file tests/portal_database.sql --yes`. Its fixtures are never committed.

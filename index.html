@@ -231,10 +231,10 @@
 
           <section class="activity-card" aria-labelledby="activity-heading">
             <h3 id="activity-heading">2. Order overview</h3>
-            <p>Orders submitted through the website, with their status and total value.</p>
+            <p>Customer orders, verified PayPal payments, and email fulfillment records.</p>
             <div class="activity-stats">
               <div><small>Orders received</small><strong id="payment-count">0</strong><span>All website orders</span></div>
-              <div><small>Order total</small><strong id="payment-total">$0</strong><span>USD</span></div>
+              <div><small>Payments received</small><strong id="payment-total">$0</strong><span>Verified PayPal payments · USD</span></div>
               <div><small>Awaiting fulfillment</small><strong id="unfulfilled-count">0</strong><span>Orders to send</span></div>
             </div>
             <h4>Recent orders</h4>
@@ -257,7 +257,7 @@
             <label for="fulfilled-date">Date</label>
             <input id="fulfilled-date" type="date" required />
             <label for="fulfilled-time">Time</label>
-            <input id="fulfilled-time" type="time" required />
+            <input id="fulfilled-time" type="time" step="1" required />
             <p class="fulfill-error" id="fulfill-error" role="alert"></p>
             <div class="fulfill-actions">
               <button id="fulfill-cancel" type="button">Cancel</button>

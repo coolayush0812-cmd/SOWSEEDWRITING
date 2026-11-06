@@ -108,50 +108,17 @@ async function savePayment(record: Record<string, unknown>): Promise<void> {
     ? JSON.parse(configuredKeys).default
     : requiredEnv("SUPABASE_SERVICE_ROLE_KEY");
   if (!serviceKey) throw new Error("Missing Supabase secret key");
-  const response = await fetch(`${url}/rest/v1/payment_records?on_conflict=transaction_id`, {
+  const response = await fetch(`${url}/rest/v1/rpc/record_paypal_capture`, {
     method: "POST",
     headers: {
       apikey: serviceKey,
       ...(serviceKey.startsWith("sb_secret_") ? {} : { authorization: `Bearer ${serviceKey}` }),
       "content-type": "application/json",
-      prefer: "resolution=ignore-duplicates,return=minimal",
     },
-    body: JSON.stringify(record),
+    body: JSON.stringify({ p_record: record }),
   });
   if (response.ok) return;
-  const error = await response.json().catch(() => ({}));
-  if (response.status === 409 && error.code === "23505") return;
   throw new Error(`Payment record insert failed (${response.status})`);
-}
-
-async function markLinkedOrderPaid(record: Record<string, any>): Promise<void> {
-  if (!record.order_id) return;
-  const url = requiredEnv("SUPABASE_URL");
-  const configuredKeys = Deno.env.get("SUPABASE_SECRET_KEYS");
-  const serviceKey = configuredKeys
-    ? JSON.parse(configuredKeys).default
-    : requiredEnv("SUPABASE_SERVICE_ROLE_KEY");
-  const headers = {
-    apikey: serviceKey,
-    ...(serviceKey.startsWith("sb_secret_") ? {} : { authorization: `Bearer ${serviceKey}` }),
-    "content-type": "application/json",
-  };
-  const query = `id=eq.${encodeURIComponent(record.order_id)}&select=id,amount,payment_status,paypal_order_id&limit=1`;
-  const lookup = await fetch(`${url}/rest/v1/orders?${query}`, { headers });
-  if (!lookup.ok) throw new Error("Could not verify the website order for this PayPal capture");
-  const order = (await lookup.json())[0];
-  if (!order || Number(order.amount) !== Number(record.amount) || order.payment_status === "FREE") {
-    throw new Error("PayPal capture did not match a payable website order");
-  }
-  if (order.paypal_order_id && order.paypal_order_id !== record.provider_order_id) {
-    throw new Error("PayPal capture order ID did not match the website order");
-  }
-  const update = await fetch(`${url}/rest/v1/orders?id=eq.${encodeURIComponent(order.id)}&payment_status=in.(PENDING,COMPLETED)`, {
-    method: "PATCH",
-    headers: { ...headers, prefer: "return=minimal" },
-    body: JSON.stringify({ payment_status: "COMPLETED", paid_at: record.paid_at }),
-  });
-  if (!update.ok) throw new Error("Could not update the website order after payment");
 }
 
 Deno.serve(async (request) => {
@@ -176,7 +143,6 @@ Deno.serve(async (request) => {
     const order = orderId ? await paypalOrder(orderId, token) : null;
     const record = paymentRecord(event, order);
     if (!record) return jsonResponse(422, { error: "Unsupported payment capture" });
-    await markLinkedOrderPaid(record);
     await savePayment(record);
     return jsonResponse(200, { received: true });
   } catch (error) {

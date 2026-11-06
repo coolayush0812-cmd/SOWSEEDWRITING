@@ -820,10 +820,19 @@ async function submitFreeBookOrder() {
   }
 }
 
-function mapOrder(row) {
+function mapOrder(row, payment = null) {
   return {
     id: row.id,
+    orderId: row.id,
+    recordKind: "order",
     createdAt: row.created_at,
+    paidAt: row.paid_at || payment?.paidAt || null,
+    paymentStatus: row.payment_status || (Number(row.amount) === 0 ? "FREE" : "UNVERIFIED"),
+    providerOrderId: row.paypal_order_id || payment?.providerOrderId || null,
+    transactionId: payment?.transactionId || null,
+    buyerEmail: payment?.buyerEmail || null,
+    contactEmail: row.customer_email,
+    itemName: row.book_title || "Personalised Digital Writing - Custom Order Made Writing",
     storyType: row.story_type,
     pageLength: row.page_length,
     pageCount: row.page_count == null ? null : Number(row.page_count),

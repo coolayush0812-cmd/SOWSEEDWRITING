@@ -34,7 +34,7 @@ function base64Url(bytes: Uint8Array): string {
   return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
 }
 
-function fromBase64Url(value: string): Uint8Array {
+function fromBase64Url(value: string) {
   const base64 = value.replaceAll("-", "+").replaceAll("_", "/");
   const binary = atob(base64 + "=".repeat((4 - base64.length % 4) % 4));
   return Uint8Array.from(binary, (char) => char.charCodeAt(0));
@@ -61,12 +61,13 @@ async function issueToken(): Promise<string> {
 async function validToken(request: Request): Promise<boolean> {
   try {
     const token = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "") || "";
-    const [payload, signature] = token.split(".");
-    if (!payload || !signature) return false;
+    const parts = token.split(".");
+    const [payload, signature] = parts;
+    if (parts.length !== 2 || !payload || !signature) return false;
     const valid = await crypto.subtle.verify("HMAC", await hmacKey(), fromBase64Url(signature), new TextEncoder().encode(payload));
     if (!valid) return false;
     const claims = JSON.parse(new TextDecoder().decode(fromBase64Url(payload)));
-    if (Number(claims.exp) <= Math.floor(Date.now() / 1000)) return false;
+    if (!Number.isInteger(claims.exp) || claims.exp <= Math.floor(Date.now() / 1000)) return false;
     const record = await passwordRecord();
     return claims.ver === (record?.changed_at || "initial");
   } catch {
@@ -75,7 +76,7 @@ async function validToken(request: Request): Promise<boolean> {
 }
 
 async function hashPassword(password: string, salt?: Uint8Array): Promise<{ salt: string; hash: string }> {
-  const saltBytes = salt || crypto.getRandomValues(new Uint8Array(16));
+  const saltBytes = salt ? new Uint8Array(salt) : crypto.getRandomValues(new Uint8Array(16));
   const material = await crypto.subtle.importKey("raw", new TextEncoder().encode(password), "PBKDF2", false, ["deriveBits"]);
   const bits = await crypto.subtle.deriveBits({ name: "PBKDF2", hash: "SHA-256", salt: saltBytes, iterations: PBKDF2_ITERATIONS }, material, 256);
   return { salt: base64Url(saltBytes), hash: base64Url(new Uint8Array(bits)) };
@@ -84,15 +85,11 @@ async function hashPassword(password: string, salt?: Uint8Array): Promise<{ salt
 async function database(path: string, init: RequestInit = {}): Promise<Response> {
   const key = serviceKey();
   const url = `${requiredEnv("SUPABASE_URL")}/rest/v1/${path}`;
-  return await fetch(url, {
-    ...init,
-    headers: {
-      apikey: key,
-      ...(key.startsWith("sb_secret_") ? {} : { authorization: `Bearer ${key}` }),
-      "content-type": "application/json",
-      ...(init.headers || {}),
-    },
-  });
+  const headers = new Headers(init.headers);
+  headers.set("apikey", key);
+  headers.set("content-type", "application/json");
+  if (!key.startsWith("sb_secret_")) headers.set("authorization", `Bearer ${key}`);
+  return await fetch(url, { ...init, headers });
 }
 
 async function passwordRecord(): Promise<{ password_salt: string; password_hash: string; changed_at: string } | null> {
@@ -118,12 +115,11 @@ async function login(request: Request, body: Payload): Promise<Response> {
 }
 
 async function listRecords(): Promise<Response> {
-  const ordersResponse = await database("orders?select=id,created_at,story_type,page_length,page_count,book_title,customer_name,customer_email,request,amount,seed_count,status,fulfilled_at,payment_status,paid_at&payment_status=in.(COMPLETED,FREE)&order=created_at.desc&limit=1000");
+  const ordersResponse = await database("orders?select=id,created_at,story_type,page_length,page_count,book_title,customer_name,customer_email,request,amount,seed_count,status,fulfilled_at,payment_status,paid_at,paypal_order_id&order=created_at.desc&limit=1000");
   if (!ordersResponse.ok) return response(502, { error: "Could not load orders. Check that the orders migration is applied." });
-  let payments: unknown[] = [];
   const paymentsResponse = await database("payment_records?select=id,order_id,provider_order_id,transaction_id,customer_name,contact_email,buyer_email,item_name,amount,paid_at,payment_status,status,fulfilled_at&order=paid_at.desc&limit=1000");
-  if (paymentsResponse.ok) payments = await paymentsResponse.json();
-  return response(200, { orders: await ordersResponse.json(), payments });
+  if (!paymentsResponse.ok) return response(502, { error: "Could not load payment records. Please reload or check the database migration." });
+  return response(200, { orders: await ordersResponse.json(), payments: await paymentsResponse.json() });
 }
 
 async function fulfill(body: Payload): Promise<Response> {
@@ -133,18 +129,16 @@ async function fulfill(body: Payload): Promise<Response> {
   if (!kind || !id || !fulfilledAt || Number.isNaN(fulfilledAt.getTime()) || fulfilledAt > new Date()) {
     return response(400, { error: "Invalid fulfillment details." });
   }
-  const table = kind === "payment" ? "payment_records" : "orders";
-  const pendingStatus = kind === "payment" ? "unfulfilled" : "pending";
-  const paymentFilter = kind === "payment" ? "&payment_status=eq.COMPLETED" : "&payment_status=in.(COMPLETED,FREE)";
-  const result = await database(`${table}?id=eq.${encodeURIComponent(id)}&status=eq.${pendingStatus}${paymentFilter}`, {
-    method: "PATCH",
-    headers: { prefer: "return=representation" },
-    body: JSON.stringify({ status: "fulfilled", fulfilled_at: fulfilledAt.toISOString() }),
+  const result = await database("rpc/fulfill_admin_order", {
+    method: "POST",
+    body: JSON.stringify({ p_kind: kind, p_id: id, p_fulfilled_at: fulfilledAt.toISOString() }),
   });
-  if (!result.ok) return response(502, { error: "Could not save fulfillment." });
-  const updated = await result.json();
-  if (!updated.length) return response(409, { error: "This order is already fulfilled or could not be found." });
-  return response(200, { record: updated[0] });
+  if (!result.ok) {
+    const error = await result.json().catch(() => ({}));
+    if (error.code === "22023" || error.code === "P0002") return response(409, { error: error.message });
+    return response(502, { error: "Could not save fulfillment. Check that the portal migration is applied." });
+  }
+  return response(200, { record: await result.json() });
 }
 
 async function changePassword(request: Request, body: Payload): Promise<Response> {

@@ -40,10 +40,10 @@ function receiptDate(value) {
 }
 
 function buildReceiptPdf(payment) {
-  if (payment.status !== "fulfilled" || !payment.fulfilledAt || (payment.paymentStatus && payment.paymentStatus !== "COMPLETED")) {
+  if (payment.status !== "fulfilled" || !payment.fulfilledAt || (payment.paymentStatus && !["COMPLETED", "FREE", "UNVERIFIED"].includes(payment.paymentStatus))) {
     throw new Error("A receipt is available only after an order is fulfilled.");
   }
-  const verifiedPayment = Boolean(payment.paymentStatus);
+  const verifiedPayment = payment.paymentStatus === "COMPLETED" && Boolean(payment.transactionId);
   const item = payment.itemName || payment.bookTitle || payment.pageLength || "Personal writing request";
   const orderDate = payment.paidAt || payment.createdAt;
   const orderId = payment.orderId || payment.providerOrderId || payment.id || payment.transactionId;
