@@ -72,21 +72,21 @@
       <!-- RIGHT: ORDER / PAYMENT -->
       <section class="panel checkout-panel" id="order" aria-labelledby="checkout-title">
         <div class="checkout-header">
-          <span class="eyebrow" id="checkout-eyebrow">Personal request form</span>
+          <span class="eyebrow" id="checkout-eyebrow">From the library</span>
           <h2 id="checkout-title">Start Your Order</h2>
-          <p id="checkout-intro">Order a custom story or script, or choose an original ebook from our library.</p>
+          <p id="checkout-intro">Select a book from the menu to start your order.</p>
         </div>
         <div class="choice-section story-selection" role="group" aria-labelledby="story-selection-title">
           <span class="selection-label" id="story-selection-title">Type of Story</span>
           <div class="story-options">
-            <button class="choice-button personal-choice active" id="personal-request-choice" type="button" aria-pressed="true">Personal Request</button>
-            <select id="book-select" name="bookSelect" aria-label="Choose a book">
+            <select class="book-selected" id="book-select" name="bookSelect" aria-label="Choose a book">
               <option value="">Select a book</option>
             </select>
+            <button class="choice-button personal-choice" id="personal-request-choice" type="button" aria-pressed="false">Personal Request</button>
           </div>
         </div>
 
-        <form id="payment-form" novalidate>
+        <form id="payment-form" novalidate hidden>
           <input id="story-type" name="storyType" type="hidden" value="Personal Request" />
 
           <div class="choice-section page-slider-section">
@@ -158,7 +158,7 @@
           <div id="book-order-message" class="form-message" role="status" aria-live="polite"></div>
         </div>
 
-        <div class="checkout-footer" id="checkout-footer">
+        <div class="checkout-footer" id="checkout-footer" hidden>
           <div><span>✓</span> Original writing</div>
           <div><span>✓</span> Fiction &amp; nonfiction</div>
           <div><span>✓</span> Custom stories &amp; scripts</div>

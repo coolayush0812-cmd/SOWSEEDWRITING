@@ -568,10 +568,10 @@ function showError(field, message) {
   if (error) error.textContent = message;
 }
 
-function showOrderMode(bookTitle = "") {
+function showOrderMode(bookTitle = "", mode = bookTitle ? "book" : "personal") {
   resetPaymentOptions("personal");
   resetPaymentOptions("book");
-  const isBook = Boolean(bookTitle);
+  const isBook = mode === "book";
   const personalChoice = document.querySelector("#personal-request-choice");
   const form = document.querySelector("#payment-form");
   const bookPurchase = document.querySelector("#book-purchase");
@@ -580,11 +580,12 @@ function showOrderMode(bookTitle = "") {
   document.querySelector("#book-select").classList.toggle("book-selected", isBook);
   form.hidden = isBook;
   document.querySelector("#checkout-footer").hidden = isBook;
-  bookPurchase.hidden = !isBook;
+  bookPurchase.hidden = !isBook || !bookTitle;
   document.querySelector("#checkout-eyebrow").textContent = isBook ? "From the library" : "Personal request form";
-  document.querySelector("#checkout-intro").hidden = isBook;
+  document.querySelector("#checkout-intro").hidden = isBook && Boolean(bookTitle);
+  document.querySelector("#checkout-intro").textContent = isBook ? "Select a book from the menu to start your order." : "Order a custom story or script, or choose an original ebook from our library.";
 
-  if (!isBook) return;
+  if (!isBook || !bookTitle) return;
   document.querySelector("#selected-book-name").textContent = bookTitle;
   const book = BOOKS.find((item) => item.title === bookTitle);
   document.querySelector("#selected-book-summary").textContent = book?.story || book?.description || "";
@@ -617,7 +618,7 @@ function configureOrderForm() {
     booksInSeries(series).forEach((book) => group.append(new Option(book.title, book.title)));
     bookSelect.append(group);
   });
-  bookSelect.addEventListener("change", () => showOrderMode(bookSelect.value));
+  bookSelect.addEventListener("change", () => showOrderMode(bookSelect.value, "book"));
   document.querySelector("#book-buy-button").addEventListener("click", () => {
     if (BOOK_PRICES[bookSelect.value] === 0) return submitFreeBookOrder();
     return beginCheckout("book");
@@ -635,8 +636,7 @@ function configureOrderForm() {
   });
   document.querySelector("#payment-form").addEventListener("input", () => resetPaymentOptions("personal"));
   document.querySelector("#book-purchase").addEventListener("input", () => resetPaymentOptions("book"));
-  resetPaymentOptions("personal");
-  resetPaymentOptions("book");
+  showOrderMode(bookSelect.value, "book");
 }
 
 function resetPaymentOptions(kind) {
