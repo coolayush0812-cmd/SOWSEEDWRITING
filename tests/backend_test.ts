@@ -212,3 +212,29 @@ Deno.test("portal includes unmatched payments once and excludes unpaid orders fr
   const free = new TextDecoder().decode(api.buildReceiptPdf({ ...merged[0], amount: 0, paymentStatus: "FREE", transactionId: null, status: "fulfilled", fulfilledAt: "2026-11-06T00:02:00Z" }));
   assert(free.includes("ORDER TOTAL"));
 });
+
+Deno.test("deleting orders requires a signed admin session and uses the atomic archive RPC", async () => {
+  const writes: unknown[] = [];
+  await withFetch((url, init) => {
+    if (url.includes("admin_settings?")) return json([]);
+    if (url.endsWith("rpc/delete_admin_order")) {
+      writes.push(JSON.parse(String(init.body)));
+      return json({ deleted: true });
+    }
+    if (url.includes("orders?") || url.includes("payment_records?")) {
+      assert(url.includes("deleted_at=is.null"), "Deleted records must be excluded");
+      return json([]);
+    }
+    throw new Error(`Unexpected request ${url}`);
+  }, async () => {
+    equal((await call("admin-portal", { action: "delete", kind: "order", id: orderId })).status, 401);
+    equal(writes.length, 0);
+    const { token } = await (await call("admin-portal", { action: "login", password: "test-password-only" })).json();
+    equal((await call("admin-portal", { action: "delete", kind: "invalid", id: orderId }, token)).status, 400);
+    for (const kind of ["order", "payment"]) {
+      equal((await call("admin-portal", { action: "delete", kind, id: orderId }, token)).status, 200);
+    }
+    equal(writes, [{ p_kind: "order", p_id: orderId }, { p_kind: "payment", p_id: orderId }]);
+    equal((await call("admin-portal", { action: "list" }, token)).status, 200);
+  });
+});

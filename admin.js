@@ -242,7 +242,7 @@ function renderPaymentCard(payment) {
       <div class="payment-fields">${fields.map(([label, value]) => `<div><small>${label}</small><span>${escapeHtml(value)}</span></div>`).join("")}</div>
       <div class="payment-actions">
         <button type="button" data-action="receipt" data-id="${id}" ${fulfilled ? "" : "disabled title=\"Available after fulfillment\""}>Download PDF</button>
-        <button type="button" data-action="fulfill" data-id="${id}" ${fulfilled ? "disabled" : ""}>${fulfilled ? "✓ Fulfilled" : "Mark fulfilled"}</button>
+        <button type="button" data-action="fulfill" data-id="${id}" ${fulfilled ? "disabled" : ""}>${fulfilled ? "✓ Fulfilled" : "Mark fulfilled"}</button><button type="button" class="delete-order-button" data-action="delete" data-id="${id}">Delete</button>
       </div>
     </article>`;
 }
@@ -279,7 +279,7 @@ function renderOrderCalendarCard(order) {
   return `<article class="payment-card order-calendar-card">
     <div class="payment-card-head"><div><strong>${escapeHtml(order.name)}</strong><small>${escapeHtml(adminTime(orderRecordedAt(order)))} · ${escapeHtml(order.email)}</small></div><strong>${adminMoney(order.amount)}</strong></div>
     <div class="payment-fields"><div><small>Order ID</small><span>${escapeHtml(order.orderId || order.providerOrderId || order.id)}</span></div><div><small>Transaction ID</small><span>${escapeHtml(order.transactionId || "—")}</span></div><div><small>Item</small><span>${escapeHtml(description)}</span></div><div><small>Payment</small><span>${escapeHtml(orderPaymentLabel(order))}</span></div><div><small>Status</small><span>${fulfilled ? `Fulfilled ${escapeHtml(adminDateTime(order.fulfilledAt))}` : "Unfulfilled"}</span></div>${order.request ? `<div><small>Request</small><span>${escapeHtml(order.request)}</span></div>` : ""}</div>
-    <div class="payment-actions"><button type="button" data-action="${receiptAction}" data-id="${escapeHtml(order.id)}" ${fulfilled ? "" : "disabled title=\"Available after fulfillment\""}>Download PDF</button><button type="button" data-action="${fulfillAction}" data-id="${escapeHtml(order.id)}" ${orderCanFulfill(order) ? "" : "disabled"}>${fulfilled ? "✓ Fulfilled" : "Mark fulfilled"}</button></div>
+    <div class="payment-actions"><button type="button" data-action="${receiptAction}" data-id="${escapeHtml(order.id)}" ${fulfilled ? "" : "disabled title=\"Available after fulfillment\""}>Download PDF</button><button type="button" data-action="${fulfillAction}" data-id="${escapeHtml(order.id)}" ${orderCanFulfill(order) ? "" : "disabled"}>${fulfilled ? "✓ Fulfilled" : "Mark fulfilled"}</button><button type="button" class="delete-order-button" data-action="delete" data-kind="${order.recordKind === "payment" ? "payment" : "order"}" data-id="${escapeHtml(order.id)}">Delete</button></div>
   </article>`;
 }
 
@@ -364,6 +364,22 @@ async function submitFulfillment(event) {
   } finally {
     button.disabled = false;
     button.textContent = "Mark fulfilled";
+  }
+}
+
+async function deletePortalOrder(id, kind, button) {
+  if (!window.confirm("Delete this order from the portal? This removes it from the calendar and totals. It does not refund the payment.")) return;
+  button.disabled = true;
+  button.textContent = "Deleting…";
+  try {
+    await adminApiRequest("delete", { id, kind });
+    await renderAdmin();
+    setAdminStatus("Order deleted.");
+  } catch (error) {
+    setAdminStatus(error.message || "Could not delete the order.", true);
+  } finally {
+    button.disabled = false;
+    button.textContent = "Delete";
   }
 }
 
@@ -469,6 +485,10 @@ function configureAdminPortal() {
   document.querySelector("#orders-list").addEventListener("click", (event) => {
     const action = event.target.closest("button[data-action]");
     if (!action || action.disabled) return;
+    if (action.dataset.action === "delete") {
+      deletePortalOrder(action.dataset.id, action.dataset.kind || "payment", action);
+      return;
+    }
     const payment = adminState.payments.find((item) => item.id === action.dataset.id);
     const order = state.orders.find((item) => item.id === action.dataset.id);
     if (action.dataset.action === "fulfill-order" && order) openFulfillModal(order.id, action, "order");

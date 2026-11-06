@@ -130,9 +130,9 @@ async function allDatabaseRecords(path: string): Promise<unknown[] | null> {
 }
 
 async function listRecords(): Promise<Response> {
-  const orders = await allDatabaseRecords("orders?select=id,created_at,story_type,page_length,page_count,book_title,customer_name,customer_email,request,amount,seed_count,status,fulfilled_at,payment_status,paid_at,paypal_order_id&order=created_at.desc,id.desc");
+  const orders = await allDatabaseRecords("orders?select=id,created_at,story_type,page_length,page_count,book_title,customer_name,customer_email,request,amount,seed_count,status,fulfilled_at,payment_status,paid_at,paypal_order_id&deleted_at=is.null&order=created_at.desc,id.desc");
   if (!orders) return response(502, { error: "Could not load orders. Check that the orders migration is applied." });
-  const payments = await allDatabaseRecords("payment_records?select=id,order_id,provider_order_id,transaction_id,customer_name,contact_email,buyer_email,item_name,amount,paid_at,payment_status,status,fulfilled_at&order=paid_at.desc,id.desc");
+  const payments = await allDatabaseRecords("payment_records?select=id,order_id,provider_order_id,transaction_id,customer_name,contact_email,buyer_email,item_name,amount,paid_at,payment_status,status,fulfilled_at&deleted_at=is.null&order=paid_at.desc,id.desc");
   if (!payments) return response(502, { error: "Could not load payment records. Please reload or check the database migration." });
   return response(200, { orders, payments });
 }
@@ -152,6 +152,21 @@ async function fulfill(body: Payload): Promise<Response> {
     const error = await result.json().catch(() => ({}));
     if (error.code === "22023" || error.code === "P0002") return response(409, { error: error.message });
     return response(502, { error: "Could not save fulfillment. Check that the portal migration is applied." });
+  }
+  return response(200, { record: await result.json() });
+}
+
+async function deleteOrder(body: Payload): Promise<Response> {
+  const kind = body.kind === "payment" ? "payment" : body.kind === "order" ? "order" : null;
+  const id = typeof body.id === "string" ? body.id.trim() : "";
+  if (!kind || !id || id.length > 160) return response(400, { error: "Invalid order details." });
+  const result = await database("rpc/delete_admin_order", {
+    method: "POST", body: JSON.stringify({ p_kind: kind, p_id: id }),
+  });
+  if (!result.ok) {
+    const error = await result.json().catch(() => ({}));
+    if (error.code === "P0002") return response(404, { error: "Order not found." });
+    return response(502, { error: "Could not delete the order. Please try again." });
   }
   return response(200, { record: await result.json() });
 }
@@ -188,6 +203,7 @@ Deno.serve(async (request) => {
     if (!await validToken(request)) return response(401, { error: "Your admin session expired. Sign in again." });
     if (body.action === "list") return await listRecords();
     if (body.action === "fulfill") return await fulfill(body);
+    if (body.action === "delete") return await deleteOrder(body);
     return response(400, { error: "Unknown admin action." });
   } catch (error) {
     console.error("Admin portal request failed", error);

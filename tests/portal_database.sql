@@ -67,6 +67,17 @@ begin
      or has_column_privilege('anon', 'public.orders', 'id', 'insert') then
     raise exception 'Private order writes are exposed to browser roles';
   end if;
+  perform public.delete_admin_order('order', v_order_id);
+  perform public.record_paypal_capture(v_record);
+  if not exists(select 1 from public.orders where id = v_order_id and deleted_at is not null)
+     or not exists(select 1 from public.payment_records where order_id = v_order_id and deleted_at is not null) then
+    raise exception 'Deleting an order must archive its payment and survive repeated webhooks';
+  end if;
+  perform public.delete_admin_order('payment', (select id::text from public.payment_records where order_id = v_order_id));
+  if has_function_privilege('anon', 'public.delete_admin_order(text,text)', 'execute')
+     or has_function_privilege('authenticated', 'public.delete_admin_order(text,text)', 'execute') then
+    raise exception 'Deletion must require the admin service';
+  end if;
   raise notice 'PASS: atomic capture, duplicate delivery, amount verification, fulfillment dates, and private writes';
 end;
 $$;

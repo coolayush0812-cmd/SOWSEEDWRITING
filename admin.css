@@ -190,6 +190,7 @@
 .payment-actions { display: flex; flex-wrap: wrap; gap: 9px; }
 .payment-actions button { min-height: 38px; padding: 8px 12px; border: 0; border-radius: 20px; background: #f0e7d6; color: #534637; font-size: 11px; font-weight: 800 !important; }
 .payment-actions button[data-action="fulfill"] { background: #816b49; color: white; }
+.payment-actions .delete-order-button { background: #fbe9e7; color: #a52c26; }
 .calendar-totals { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 13px; }
 .calendar-totals div,
 .activity-stats div { display: flex; flex-direction: column; gap: 4px; padding: 14px; border: 1px solid #edddc3; border-radius: 15px; background: #fffaf1; }
