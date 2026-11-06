@@ -118,7 +118,7 @@ async function login(request: Request, body: Payload): Promise<Response> {
 }
 
 async function listRecords(): Promise<Response> {
-  const ordersResponse = await database("orders?select=id,created_at,story_type,page_length,page_count,book_title,customer_name,customer_email,request,amount,seed_count,status,fulfilled_at&order=created_at.desc&limit=1000");
+  const ordersResponse = await database("orders?select=id,created_at,story_type,page_length,page_count,book_title,customer_name,customer_email,request,amount,seed_count,status,fulfilled_at,payment_status,paid_at&payment_status=in.(COMPLETED,FREE)&order=created_at.desc&limit=1000");
   if (!ordersResponse.ok) return response(502, { error: "Could not load orders. Check that the orders migration is applied." });
   let payments: unknown[] = [];
   const paymentsResponse = await database("payment_records?select=id,order_id,provider_order_id,transaction_id,customer_name,contact_email,buyer_email,item_name,amount,paid_at,payment_status,status,fulfilled_at&order=paid_at.desc&limit=1000");
@@ -135,7 +135,7 @@ async function fulfill(body: Payload): Promise<Response> {
   }
   const table = kind === "payment" ? "payment_records" : "orders";
   const pendingStatus = kind === "payment" ? "unfulfilled" : "pending";
-  const paymentFilter = kind === "payment" ? "&payment_status=eq.COMPLETED" : "";
+  const paymentFilter = kind === "payment" ? "&payment_status=eq.COMPLETED" : "&payment_status=in.(COMPLETED,FREE)";
   const result = await database(`${table}?id=eq.${encodeURIComponent(id)}&status=eq.${pendingStatus}${paymentFilter}`, {
     method: "PATCH",
     headers: { prefer: "return=representation" },

@@ -120,10 +120,7 @@
             <small class="error" data-error-for="request"></small>
           </div>
 
-          <button class="pay-button" type="submit">
-            <span>Get Your Personalised Story</span>
-            <span aria-hidden="true">→</span>
-          </button>
+          <div id="personal-paypal-container" class="paypal-button-container"></div>
           <p class="secure-note">Personal requests are written for you and delivered by email within up to 7 days.</p>
           <div id="form-message" class="form-message" role="status" aria-live="polite"></div>
         </form>
@@ -147,7 +144,8 @@
               <small class="error" id="book-email-error"></small>
             </div>
           </div>
-          <button class="pay-button book-buy-button" id="book-buy-button" type="button"><span id="book-buy-label">Place book order</span><span aria-hidden="true">→</span></button>
+          <button class="pay-button book-buy-button" id="book-buy-button" type="button" hidden><span id="book-buy-label">Get free book</span><span aria-hidden="true">→</span></button>
+          <div id="book-paypal-container" class="paypal-button-container" hidden></div>
           <p class="secure-note">After purchase, your ebook is available instantly and a copy is sent to your email.</p>
           <div id="book-order-message" class="form-message" role="status" aria-live="polite"></div>
         </div>
@@ -291,7 +289,6 @@
     </section>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
   <script src="script.js"></script>
   <script src="receipt.js"></script>

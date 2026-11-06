@@ -581,6 +581,8 @@ textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(182,99,
 .pay-button:active { box-shadow: inset 4px 4px 9px rgba(100,42,17,.30), inset -3px -3px 8px rgba(255,188,139,.18); transform: translateY(1px); }
 .pay-button:disabled { cursor: wait; filter: grayscale(.2); opacity: .72; transform: none; }
 .pay-button.book-buy-button:disabled { cursor: not-allowed; opacity: .55; }
+.paypal-button-container { width: 100%; min-height: 42px; margin: 13px 0 0; }
+.paypal-button-container[hidden] { display: none; }
 
 .pay-button > span:last-child {
   width: 29px;
