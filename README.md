@@ -45,6 +45,8 @@ Book prices are listed in `BOOK_PRICES` in `script.js` and independently verifie
 
 The portal shows pending, paid, free, cancelled, and older unverified orders. It also shows PayPal records without a matching website order, without counting linked orders twice. Only verified PayPal payments contribute to revenue. Existing manual orders remain visible as payment unverified. Marking an order fulfilled updates its linked payment in the same transaction; the PDF includes the PayPal transaction details when available.
 
+The calendar shows dates and times in the current device's time zone and refreshes every minute while the portal is open. The Today button returns to the current date. The backend loads the complete record history in pages, and the fulfillment list can be expanded beyond its first twenty orders. Closing the portal or signing out stops automatic refresh.
+
 ## Supabase setup
 
 The browser connection is configured in `supabase-config.js` and points to `https://jzcsjkntbueyeuykymwh.supabase.co`. Its publishable key is configured in `publicKey`. Never place a secret or service-role key in frontend code.
@@ -75,12 +77,12 @@ supabase functions deploy paypal-webhook --no-verify-jwt
 
 Set the function secrets through the Supabase dashboard or `supabase secrets set` without committing their values. The admin function verifies its own signed sessions and password, so deploy it with gateway JWT verification disabled. Do not create or invite Supabase Auth admin users for this portal.
 
-Once deployed, PayPal buttons create and capture orders through the server-side Orders v2 API. The server sets the displayed line-item name, verifies the amount against the selected book/page count, and records the completed payment. The signed webhook independently reconciles the capture. The admin function returns paid/free order records and saves fulfillment dates. A receipt PDF becomes available after an order is marked fulfilled.
+Once deployed, PayPal buttons create and capture orders through the server-side Orders v2 API. The server sets the displayed line-item name, verifies the amount against the selected book/page count, and records the completed payment. The signed webhook independently reconciles the capture. The admin function returns order and payment records and saves fulfillment dates. A receipt PDF becomes available after an order is marked fulfilled.
 
 Paid ebook checkout currently records and confirms the purchase. Instant ebook download and automatic email attachment require adding the ebook files and an email-delivery provider; they are not part of the PayPal capture flow.
 
 ## Checks
 
-Run `deno test --allow-read --allow-env tests/backend_test.ts` for the function and portal regression tests. They mock PayPal and database requests and never charge a payment.
+Run `deno test --allow-read --allow-env tests/` for backend, calendar, refresh, and receipt regression tests. They mock PayPal and database requests and never charge a payment.
 
 `tests/portal_database.sql` checks capture deduplication, amount matching, and fulfillment consistency in a rolled-back transaction. Run it against the migrated database with `supabase db query --remote --file tests/portal_database.sql --yes`. Its fixtures are never committed.

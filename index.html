@@ -205,7 +205,8 @@
 
         <div class="admin-layout">
           <section class="calendar-card" aria-labelledby="calendar-heading">
-            <h3 id="calendar-heading">1. Admin order calendar</h3>
+            <div class="calendar-section-heading"><h3 id="calendar-heading">1. Admin order calendar</h3><button class="admin-signout" id="calendar-today" type="button">Today</button></div>
+            <p class="admin-calendar-note" id="admin-time-zone"></p>
             <div class="calendar-inner">
               <div class="calendar-toolbar">
                 <button id="calendar-prev" type="button" aria-label="Previous month">‹</button>
@@ -245,6 +246,7 @@
               <h4>Orders to fulfill</h4>
               <p>Send the order by email, then record when you fulfilled it.</p>
               <div class="request-list" id="request-list"></div>
+              <button class="admin-reload" id="requests-load-more" type="button" hidden>Show more orders</button>
             </div>
           </section>
         </div>

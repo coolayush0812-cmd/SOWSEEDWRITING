@@ -67,6 +67,32 @@ Deno.test("admin requires its password and signed session; fulfillment uses the 
   });
 });
 
+Deno.test("admin loads records beyond the first 1000 and rejects a partial failed history", async () => {
+  let failSecondPage = false;
+  const offsets: number[] = [];
+  await withFetch((url) => {
+    if (url.includes("admin_settings?")) return json([]);
+    const offset = Number(new URL(url).searchParams.get("offset"));
+    if (url.includes("/orders?")) {
+      offsets.push(offset);
+      if (offset === 1000 && failSecondPage) return json({ message: "unavailable" }, 500);
+      const page = Array.from({ length: offset === 0 ? 1000 : 2 }, (_, index) => ({ id: `order-${offset + index}` }));
+      return json(offset === 0 ? page : [{ id: "order-999" }, ...page]);
+    }
+    if (url.includes("/payment_records?")) return json(Array.from({ length: offset === 0 ? 1000 : 1 }, (_, index) => ({ id: `payment-${offset + index}` })));
+    throw new Error(`Unexpected request ${url}`);
+  }, async () => {
+    const login = await call("admin-portal", { action: "login", password: "test-password-only" });
+    const { token } = await login.json();
+    const result = await call("admin-portal", { action: "list" }, token);
+    equal(result.status, 200);
+    const records = await result.json();
+    equal(records.orders.length, 1002); equal(records.payments.length, 1001); equal(offsets, [0, 1000]);
+    failSecondPage = true;
+    equal((await call("admin-portal", { action: "list" }, token)).status, 502);
+  });
+});
+
 Deno.test("checkout uses server prices and exact PayPal item names for personal writing and books", async () => {
   const units: Record<string, any>[] = [];
   const rows: Record<string, any>[] = [];

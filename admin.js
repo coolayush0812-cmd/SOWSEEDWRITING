@@ -8,6 +8,9 @@ const adminState = {
   pendingOrderId: null,
   returnFocus: null,
   lastFocusedElement: null,
+  refreshTimer: null,
+  requestSequence: 0,
+  requestsShown: 20,
 };
 const ADMIN_SESSION_KEY = "seed-garden-admin-session";
 
@@ -130,15 +133,18 @@ function setAdminStatus(message, isError = false) {
 }
 
 async function renderAdmin() {
-  if (document.querySelector("#admin-dashboard").hidden) return;
+  if (document.querySelector("#admin-dashboard").hidden || document.querySelector("#admin-portal").hidden) return;
+  const requestSequence = ++adminState.requestSequence;
   setAdminStatus("Loading orders…");
   try {
     const records = await adminApiRequest("list");
+    if (requestSequence !== adminState.requestSequence || document.querySelector("#admin-dashboard").hidden) return;
     adminState.payments = (records.payments || []).map(mapPayment);
     state.orders = mergeAdminOrders(records.orders, adminState.payments);
     adminState.paymentError = null;
     adminState.requestError = null;
   } catch (error) {
+    if (requestSequence !== adminState.requestSequence || document.querySelector("#admin-dashboard").hidden) return;
     adminState.paymentError = error;
     adminState.requestError = error;
     console.error("Unable to load admin records", error);
@@ -163,8 +169,16 @@ async function renderAdmin() {
   }
 }
 
-function completedPayments() {
-  return adminState.payments.filter((payment) => payment.paymentStatus === "COMPLETED");
+function stopAdminRefresh() {
+  if (adminState.refreshTimer !== null) clearInterval(adminState.refreshTimer);
+  adminState.refreshTimer = null;
+}
+
+function startAdminRefresh() {
+  stopAdminRefresh();
+  adminState.refreshTimer = setInterval(() => {
+    if (document.visibilityState === "visible") renderAdmin();
+  }, 60_000);
 }
 
 function renderAdminCalendar() {
@@ -174,6 +188,7 @@ function renderAdminCalendar() {
   const firstDay = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const dailyTotals = new Map();
+  const focusedDate = grid.contains(document.activeElement) ? document.activeElement.dataset.date : null;
 
   state.orders.forEach((order) => {
     const key = localDateKey(orderRecordedAt(order));
@@ -202,7 +217,9 @@ function renderAdminCalendar() {
     button.classList.toggle("has-orders", Boolean(total));
     button.classList.toggle("is-today", key === localDateKey(new Date()));
     button.classList.toggle("is-selected", key === adminState.selectedDate);
+    button.setAttribute("aria-pressed", String(key === adminState.selectedDate));
     grid.append(button);
+    if (key === focusedDate) button.focus({ preventScroll: true });
   }
 }
 
@@ -278,8 +295,9 @@ function renderPaymentActivity() {
 
 function renderWritingRequests() {
   const requests = state.orders.filter(orderCanFulfill).sort((a, b) => new Date(orderRecordedAt(a)) - new Date(orderRecordedAt(b)));
+  document.querySelector("#requests-load-more").hidden = requests.length <= adminState.requestsShown;
   document.querySelector("#request-list").innerHTML = requests.length
-    ? requests.slice(0, 20).map((order) => `<article class="request-card"><div><strong>${escapeHtml(order.name)}</strong><span>${escapeHtml(order.bookTitle || order.pageLength)} · ${adminMoney(order.amount)}</span></div><small>${escapeHtml(adminDateTime(orderRecordedAt(order)))} · ${escapeHtml(order.email)}</small><p>${escapeHtml(order.bookTitle ? `Book order: ${order.bookTitle}` : order.request)}</p><div class="request-card-actions"><span>${escapeHtml(orderPaymentLabel(order))}</span><button type="button" data-action="${order.recordKind === "payment" ? "fulfill" : "fulfill-order"}" data-id="${escapeHtml(order.id)}">Mark fulfilled</button></div></article>`).join("")
+    ? requests.slice(0, adminState.requestsShown).map((order) => `<article class="request-card"><div><strong>${escapeHtml(order.name)}</strong><span>${escapeHtml(order.bookTitle || order.pageLength)} · ${adminMoney(order.amount)}</span></div><small>${escapeHtml(adminDateTime(orderRecordedAt(order)))} · ${escapeHtml(order.email)}</small><p>${escapeHtml(order.bookTitle ? `Book order: ${order.bookTitle}` : order.request)}</p><div class="request-card-actions"><span>${escapeHtml(orderPaymentLabel(order))}</span><button type="button" data-action="${order.recordKind === "payment" ? "fulfill" : "fulfill-order"}" data-id="${escapeHtml(order.id)}">Mark fulfilled</button></div></article>`).join("")
     : '<div class="empty-orders">No orders are awaiting fulfillment.</div>';
 }
 
@@ -353,6 +371,15 @@ function configureAdminPortal() {
   const portal = document.querySelector("#admin-portal");
   const loginForm = document.querySelector("#admin-login-form");
   adminState.selectedDate = localDateKey(new Date());
+  document.querySelector("#admin-time-zone").textContent = `Times shown in ${Intl.DateTimeFormat().resolvedOptions().timeZone}. Updates every minute.`;
+  document.querySelector("#calendar-today").addEventListener("click", goToToday);
+  document.querySelector("#requests-load-more").addEventListener("click", () => {
+    adminState.requestsShown += 20;
+    renderWritingRequests();
+  });
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible" && !portal.hidden && !document.querySelector("#admin-dashboard").hidden) renderAdmin();
+  });
 
   document.querySelector("#admin-open").addEventListener("click", openAdmin);
   document.querySelectorAll("[data-admin-close]").forEach((button) => button.addEventListener("click", closeAdmin));
@@ -481,6 +508,14 @@ function moveCalendar(direction) {
   renderSelectedDay();
 }
 
+function goToToday() {
+  const now = new Date();
+  adminState.calendarCursor = new Date(now.getFullYear(), now.getMonth(), 1);
+  adminState.selectedDate = localDateKey(now);
+  renderAdminCalendar();
+  renderSelectedDay();
+}
+
 async function openAdmin() {
   adminState.lastFocusedElement = document.activeElement;
   document.querySelector(".page-shell").inert = true;
@@ -493,6 +528,8 @@ async function openAdmin() {
 }
 
 function closeAdmin() {
+  stopAdminRefresh();
+  adminState.requestSequence += 1;
   closeFulfillModal(false);
   document.querySelector("#password-modal").hidden = true;
   document.querySelector("#admin-dashboard").inert = false;
@@ -502,6 +539,11 @@ function closeAdmin() {
 }
 
 function showAdminLogin() {
+  stopAdminRefresh();
+  adminState.requestSequence += 1;
+  adminState.payments = [];
+  adminState.requestsShown = 20;
+  state.orders = [];
   document.querySelector("#admin-login").hidden = false;
   document.querySelector("#admin-dashboard").hidden = true;
   requestAnimationFrame(() => document.querySelector("#admin-password").focus());
@@ -510,6 +552,7 @@ function showAdminLogin() {
 async function showAdminDashboard() {
   document.querySelector("#admin-login").hidden = true;
   document.querySelector("#admin-dashboard").hidden = false;
+  startAdminRefresh();
   await renderAdmin();
   requestAnimationFrame(() => document.querySelector("#admin-reload").focus());
 }

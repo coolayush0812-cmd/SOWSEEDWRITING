@@ -121,6 +121,11 @@
 }
 .calendar-card h3,
 .activity-card h3 { margin: 0 0 16px; font-size: 18px; }
+.calendar-section-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.calendar-section-heading h3 { margin: 0; }
+.calendar-section-heading button { min-height: 32px; padding: 5px 12px; font-size: 12px; }
+.admin-calendar-note { margin: 8px 0 16px; color: #7a6f5c; font-size: 11px; line-height: 1.5; }
+#requests-load-more { width: 100%; margin-top: 12px; }
 .calendar-inner {
   padding: 18px;
   border: 1px solid #eae3d5;

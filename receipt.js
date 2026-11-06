@@ -12,7 +12,11 @@ function pdfEscape(value) {
 }
 
 function pdfLines(value, maxChars = 42, maxLines = 2) {
-  const words = pdfPlain(value).split(/\s+/).filter(Boolean);
+  const words = pdfPlain(value).split(/\s+/).filter(Boolean).flatMap((word) => {
+    const parts = [];
+    for (let offset = 0; offset < word.length; offset += maxChars) parts.push(word.slice(offset, offset + maxChars));
+    return parts;
+  });
   const lines = [];
   let line = "";
   for (const word of words) {
@@ -94,7 +98,7 @@ function buildReceiptPdf(payment) {
   field(318, 390, verifiedPayment ? "Transaction ID" : "Order type", verifiedPayment ? payment.transactionId : (payment.bookTitle ? "Book order" : "Personal request"));
   field(43, 340, "Contact email", payment.contactEmail || payment.customer_email || payment.email || payment.buyerEmail);
   field(318, 340, verifiedPayment ? "Buyer email" : "Fulfilled at", verifiedPayment ? payment.buyerEmail : receiptDate(payment.fulfilledAt));
-  rule(308);
+  rule(298);
 
   drawText(43, 282, verifiedPayment ? "PAYMENT DETAILS" : "FULFILLMENT DETAILS", 9, true, blue);
   field(43, 257, verifiedPayment ? "Payment status" : "Order status", verifiedPayment ? payment.paymentStatus : "Fulfilled");

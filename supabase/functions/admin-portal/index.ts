@@ -114,12 +114,27 @@ async function login(request: Request, body: Payload): Promise<Response> {
   return response(200, { token: await issueToken(), expiresIn: SESSION_SECONDS });
 }
 
+async function allDatabaseRecords(path: string): Promise<unknown[] | null> {
+  const records: unknown[] = [];
+  const pageSize = 1000;
+  while (true) {
+    const result = await database(`${path}&limit=${pageSize}&offset=${records.length}`);
+    if (!result.ok) return null;
+    const page = await result.json();
+    if (!Array.isArray(page)) return null;
+    records.push(...page);
+    if (page.length < pageSize) {
+      return [...new Map(records.map((record) => [(record as Record<string, unknown>).id, record])).values()];
+    }
+  }
+}
+
 async function listRecords(): Promise<Response> {
-  const ordersResponse = await database("orders?select=id,created_at,story_type,page_length,page_count,book_title,customer_name,customer_email,request,amount,seed_count,status,fulfilled_at,payment_status,paid_at,paypal_order_id&order=created_at.desc&limit=1000");
-  if (!ordersResponse.ok) return response(502, { error: "Could not load orders. Check that the orders migration is applied." });
-  const paymentsResponse = await database("payment_records?select=id,order_id,provider_order_id,transaction_id,customer_name,contact_email,buyer_email,item_name,amount,paid_at,payment_status,status,fulfilled_at&order=paid_at.desc&limit=1000");
-  if (!paymentsResponse.ok) return response(502, { error: "Could not load payment records. Please reload or check the database migration." });
-  return response(200, { orders: await ordersResponse.json(), payments: await paymentsResponse.json() });
+  const orders = await allDatabaseRecords("orders?select=id,created_at,story_type,page_length,page_count,book_title,customer_name,customer_email,request,amount,seed_count,status,fulfilled_at,payment_status,paid_at,paypal_order_id&order=created_at.desc,id.desc");
+  if (!orders) return response(502, { error: "Could not load orders. Check that the orders migration is applied." });
+  const payments = await allDatabaseRecords("payment_records?select=id,order_id,provider_order_id,transaction_id,customer_name,contact_email,buyer_email,item_name,amount,paid_at,payment_status,status,fulfilled_at&order=paid_at.desc,id.desc");
+  if (!payments) return response(502, { error: "Could not load payment records. Please reload or check the database migration." });
+  return response(200, { orders, payments });
 }
 
 async function fulfill(body: Payload): Promise<Response> {
