@@ -236,8 +236,8 @@ const BOOK_PRICES = {
 };
 
 const BOOK_SERIES = [
-  { key: "quiet", category: "Stories", title: "Of Little Things & Passing Days", subtitle: "The Quiet Stories Collection" },
   { key: "ordinary", category: "Writings & Documentaries", title: "The Stories We Leave Behind", subtitle: "An Anthology of Ordinary Lives" },
+  { key: "quiet", category: "Stories", title: "Of Little Things & Passing Days", subtitle: "The Quiet Stories Collection" },
   { key: "faith", category: "Faith-Based Stories", title: "Whispers of Grace", subtitle: "The Faith & Promise Collection" }
 ];
 
