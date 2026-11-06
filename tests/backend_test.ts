@@ -238,3 +238,23 @@ Deno.test("deleting orders requires a signed admin session and uses the atomic a
     equal((await call("admin-portal", { action: "list" }, token)).status, 200);
   });
 });
+
+Deno.test("reopening requires admin authentication and resets fulfillment through the atomic RPC", async () => {
+  const writes: unknown[] = [];
+  await withFetch((url, init) => {
+    if (url.includes("admin_settings?")) return json([]);
+    if (url.endsWith("rpc/reopen_admin_order")) {
+      writes.push(JSON.parse(String(init.body)));
+      return json({ status: "pending" });
+    }
+    throw new Error(`Unexpected request ${url}`);
+  }, async () => {
+    equal((await call("admin-portal", { action: "reopen", kind: "order", id: orderId })).status, 401);
+    const { token } = await (await call("admin-portal", { action: "login", password: "test-password-only" })).json();
+    equal((await call("admin-portal", { action: "reopen", kind: "bad", id: orderId }, token)).status, 400);
+    for (const kind of ["order", "payment"]) {
+      equal((await call("admin-portal", { action: "reopen", kind, id: orderId }, token)).status, 200);
+    }
+    equal(writes, [{ p_kind: "order", p_id: orderId }, { p_kind: "payment", p_id: orderId }]);
+  });
+});

@@ -171,6 +171,21 @@ async function deleteOrder(body: Payload): Promise<Response> {
   return response(200, { record: await result.json() });
 }
 
+async function reopenOrder(body: Payload): Promise<Response> {
+  const kind = body.kind === "payment" ? "payment" : body.kind === "order" ? "order" : null;
+  const id = typeof body.id === "string" ? body.id.trim() : "";
+  if (!kind || !id || id.length > 160) return response(400, { error: "Invalid order details." });
+  const result = await database("rpc/reopen_admin_order", {
+    method: "POST", body: JSON.stringify({ p_kind: kind, p_id: id }),
+  });
+  if (!result.ok) {
+    const error = await result.json().catch(() => ({}));
+    if (error.code === "P0002") return response(404, { error: "Order not found." });
+    return response(502, { error: "Could not reopen the order. Please try again." });
+  }
+  return response(200, { record: await result.json() });
+}
+
 async function changePassword(request: Request, body: Payload): Promise<Response> {
   if (!await validToken(request)) return response(401, { error: "Your admin session expired. Sign in again." });
   const currentPassword = typeof body.currentPassword === "string" ? body.currentPassword : "";
@@ -204,6 +219,7 @@ Deno.serve(async (request) => {
     if (body.action === "list") return await listRecords();
     if (body.action === "fulfill") return await fulfill(body);
     if (body.action === "delete") return await deleteOrder(body);
+    if (body.action === "reopen") return await reopenOrder(body);
     return response(400, { error: "Unknown admin action." });
   } catch (error) {
     console.error("Admin portal request failed", error);

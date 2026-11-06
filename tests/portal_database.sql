@@ -67,6 +67,23 @@ begin
      or has_column_privilege('anon', 'public.orders', 'id', 'insert') then
     raise exception 'Private order writes are exposed to browser roles';
   end if;
+  perform public.reopen_admin_order('order', v_order_id);
+  if not exists(select 1 from public.orders where id = v_order_id and status = 'pending' and fulfilled_at is null and payment_status = 'COMPLETED')
+     or not exists(select 1 from public.payment_records where order_id = v_order_id and status = 'unfulfilled' and fulfilled_at is null and payment_status = 'COMPLETED') then
+    raise exception 'Reopening must clear linked fulfillment without changing payment';
+  end if;
+  perform public.fulfill_admin_order('order', v_order_id, now() - interval '10 minutes');
+  if not exists(select 1 from public.orders where id = v_order_id and status = 'fulfilled' and fulfilled_at = now() - interval '10 minutes') then
+    raise exception 'Reopened fulfillment date was not corrected';
+  end if;
+  perform public.reopen_admin_order('payment', (select id::text from public.payment_records where order_id = v_order_id));
+  if not exists(select 1 from public.orders where id = v_order_id and status = 'pending' and fulfilled_at is null) then
+    raise exception 'Payment reopening must also reopen the linked order';
+  end if;
+  if has_function_privilege('anon', 'public.reopen_admin_order(text,text)', 'execute')
+     or has_function_privilege('authenticated', 'public.reopen_admin_order(text,text)', 'execute') then
+    raise exception 'Reopening must require the admin service';
+  end if;
   perform public.delete_admin_order('order', v_order_id);
   perform public.record_paypal_capture(v_record);
   if not exists(select 1 from public.orders where id = v_order_id and deleted_at is not null)

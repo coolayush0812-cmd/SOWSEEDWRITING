@@ -242,7 +242,7 @@ function renderPaymentCard(payment) {
       <div class="payment-fields">${fields.map(([label, value]) => `<div><small>${label}</small><span>${escapeHtml(value)}</span></div>`).join("")}</div>
       <div class="payment-actions">
         <button type="button" data-action="receipt" data-id="${id}" ${fulfilled ? "" : "disabled title=\"Available after fulfillment\""}>Download PDF</button>
-        <button type="button" data-action="fulfill" data-id="${id}" ${fulfilled ? "disabled" : ""}>${fulfilled ? "✓ Fulfilled" : "Mark fulfilled"}</button><button type="button" class="delete-order-button" data-action="delete" data-id="${id}">Delete</button>
+        <button type="button" data-action="${fulfilled ? "reopen" : "fulfill"}" data-id="${id}">${fulfilled ? "Reopen order" : "Mark fulfilled"}</button><button type="button" class="delete-order-button" data-action="delete" data-id="${id}">Delete</button>
       </div>
     </article>`;
 }
@@ -279,7 +279,7 @@ function renderOrderCalendarCard(order) {
   return `<article class="payment-card order-calendar-card">
     <div class="payment-card-head"><div><strong>${escapeHtml(order.name)}</strong><small>${escapeHtml(adminTime(orderRecordedAt(order)))} · ${escapeHtml(order.email)}</small></div><strong>${adminMoney(order.amount)}</strong></div>
     <div class="payment-fields"><div><small>Order ID</small><span>${escapeHtml(order.orderId || order.providerOrderId || order.id)}</span></div><div><small>Transaction ID</small><span>${escapeHtml(order.transactionId || "—")}</span></div><div><small>Item</small><span>${escapeHtml(description)}</span></div><div><small>Payment</small><span>${escapeHtml(orderPaymentLabel(order))}</span></div><div><small>Status</small><span>${fulfilled ? `Fulfilled ${escapeHtml(adminDateTime(order.fulfilledAt))}` : "Unfulfilled"}</span></div>${order.request ? `<div><small>Request</small><span>${escapeHtml(order.request)}</span></div>` : ""}</div>
-    <div class="payment-actions"><button type="button" data-action="${receiptAction}" data-id="${escapeHtml(order.id)}" ${fulfilled ? "" : "disabled title=\"Available after fulfillment\""}>Download PDF</button><button type="button" data-action="${fulfillAction}" data-id="${escapeHtml(order.id)}" ${orderCanFulfill(order) ? "" : "disabled"}>${fulfilled ? "✓ Fulfilled" : "Mark fulfilled"}</button><button type="button" class="delete-order-button" data-action="delete" data-kind="${order.recordKind === "payment" ? "payment" : "order"}" data-id="${escapeHtml(order.id)}">Delete</button></div>
+    <div class="payment-actions"><button type="button" data-action="${receiptAction}" data-id="${escapeHtml(order.id)}" ${fulfilled ? "" : "disabled title=\"Available after fulfillment\""}>Download PDF</button><button type="button" data-action="${fulfilled ? "reopen" : fulfillAction}" data-kind="${order.recordKind === "payment" ? "payment" : "order"}" data-id="${escapeHtml(order.id)}" ${fulfilled || orderCanFulfill(order) ? "" : "disabled"}>${fulfilled ? "Reopen order" : "Mark fulfilled"}</button><button type="button" class="delete-order-button" data-action="delete" data-kind="${order.recordKind === "payment" ? "payment" : "order"}" data-id="${escapeHtml(order.id)}">Delete</button></div>
   </article>`;
 }
 
@@ -364,6 +364,22 @@ async function submitFulfillment(event) {
   } finally {
     button.disabled = false;
     button.textContent = "Mark fulfilled";
+  }
+}
+
+async function reopenPortalOrder(id, kind, button) {
+  if (!window.confirm("Reopen this order? Its fulfillment date and time will be cleared so you can mark it fulfilled again with the correct details.")) return;
+  button.disabled = true;
+  button.textContent = "Reopening…";
+  try {
+    await adminApiRequest("reopen", { id, kind });
+    await renderAdmin();
+    setAdminStatus("Order reopened. Use Mark fulfilled to set the correct date and time.");
+  } catch (error) {
+    setAdminStatus(error.message || "Could not reopen the order.", true);
+  } finally {
+    button.disabled = false;
+    button.textContent = "Reopen order";
   }
 }
 
@@ -485,6 +501,10 @@ function configureAdminPortal() {
   document.querySelector("#orders-list").addEventListener("click", (event) => {
     const action = event.target.closest("button[data-action]");
     if (!action || action.disabled) return;
+    if (action.dataset.action === "reopen") {
+      reopenPortalOrder(action.dataset.id, action.dataset.kind || "payment", action);
+      return;
+    }
     if (action.dataset.action === "delete") {
       deletePortalOrder(action.dataset.id, action.dataset.kind || "payment", action);
       return;
