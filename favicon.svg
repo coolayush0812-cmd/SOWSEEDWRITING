@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <title>Pen and Sprout Logo</title>
+  <circle cx="256" cy="256" r="220" fill="#F7FAF4"/>
+  <circle cx="256" cy="256" r="201" fill="none" stroke="#DCE9D8" stroke-width="5"/>
+  <g transform="rotate(42 205 265)" stroke="#263B4A" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M205 112 L231 150 L231 315 L205 365 L179 315 L179 150 Z" fill="#FFFFFF" stroke-width="13"/>
+    <path d="M179 150 H231 M205 365 V404 L192 382 Z" fill="#DCE5E9" stroke-width="10"/>
+    <path d="M205 178 V300 M205 112 V91" fill="none" stroke-width="9"/>
+  </g>
+  <g stroke="#4F925F" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M291 382 C292 321 298 266 321 214" fill="none" stroke-width="15"/>
+    <path d="M307 282 C264 277 236 248 241 207 C281 206 315 231 307 282Z" fill="#A8D39A" stroke-width="11"/>
+    <path d="M314 244 C320 193 355 162 405 168 C406 215 371 252 314 244Z" fill="#78B66F" stroke-width="11"/>
+    <path d="M258 218 C276 235 289 252 302 273 M390 181 C360 197 338 218 318 241" fill="none" stroke-width="7"/>
+    <path d="M275 389 C302 400 332 400 357 387" fill="none" stroke-width="10"/>
+  </g>
+</svg>
